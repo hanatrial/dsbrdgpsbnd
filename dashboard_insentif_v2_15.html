@@ -5,6 +5,37 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard MPO</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+  // ============== FIRESTORE LIVE SYNC ==============
+  // Semua data (target/actual, DETAIL_DATA, MONTHLY_DATA, SPG_DATA) tetap dipersist
+  // ke localStorage seperti biasa (jadi dashboard tetap jalan offline / kalau Firestore
+  // belum dikonfigurasi), TAPI juga disinkron ke satu dokumen Firestore supaya semua
+  // orang yang buka link yang sama lihat data yang sama secara live (real-time).
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB4YX2TGqbrd2doAcMK-CSlwJ9uSn1kS4k",
+    authDomain: "dsbrdgpsbnd.firebaseapp.com",
+    projectId: "dsbrdgpsbnd",
+    storageBucket: "dsbrdgpsbnd.firebasestorage.app",
+    messagingSenderId: "714151453058",
+    appId: "1:714151453058:web:8592a098f64b6e4b8b6f9b",
+    measurementId: "G-EMNKQMS807"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const docRef = doc(db, 'dashboard_state', 'main');
+
+  function handoff(){
+    // Skrip utama (non-module, di bawah) baru mendefinisikan window.onFirebaseReady
+    // setelah render pertama selesai — kalau belum ada, coba lagi sebentar lagi.
+    if(window.onFirebaseReady){ window.onFirebaseReady({ getDoc, setDoc, onSnapshot, docRef }); }
+    else setTimeout(handoff, 50);
+  }
+  handoff();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -53,6 +84,10 @@
   .tabs button.tab-performance{border-color:var(--accent);color:var(--accent);font-weight:700;margin-left:6px;}
   .spg-store-select{max-width:130px;width:130px;font-size:12px;}
   .spg-q-cell{background:rgba(125,108,255,.06);}
+  .sync-badge{display:inline-flex;align-items:center;gap:5px;margin-top:6px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;letter-spacing:.01em;}
+  .sync-badge.sync-online{color:var(--good);background:var(--good-bg);}
+  .sync-badge.sync-offline{color:var(--sub);background:var(--bg2);}
+  .sync-badge.sync-error{color:var(--danger);background:var(--danger-bg);}
 
   .tabs button.tab-performance.active{background:var(--accent);color:#fff;border-color:var(--accent);}
 
@@ -194,6 +229,7 @@
       <div class="brand-eyebrow">Nutrifood &middot; Modern Trade</div>
       <h1>Dashboard MPO</h1>
       <div class="sub" id="subtitle">Makassar &middot; ALL</div>
+      <div class="sync-badge sync-offline" id="syncStatus">&#9679; Lokal saja (belum sync)</div>
     </div>
     <div class="toggle">
       <button id="btn-makassar" class="active" onclick="switchRegion('makassar')">Makassar</button>
@@ -645,6 +681,7 @@ function loadSpgData(){
 
 function persistSpg(){
   try{ localStorage.setItem('insentif_mpo_spg_v15', JSON.stringify(SPG_DATA)); }catch(e){ console.error(e); }
+  pushStateToFirestore();
 }
 
 function updateSpgName(group, idx, value){ SPG_DATA[group][idx].name = value; persistSpg(); }
@@ -899,6 +936,7 @@ function persist(){
     localStorage.setItem('insentif_mpo_detail_v15', JSON.stringify(DETAIL_DATA));
     localStorage.setItem('insentif_mpo_monthly_v15', JSON.stringify(MONTHLY_DATA));
   }catch(e){ console.error(e); }
+  pushStateToFirestore();
 }
 
 function switchRegion(region){
@@ -1881,6 +1919,85 @@ function switchRegionSilent(region){
   if(currentRegion !== region) switchRegion(region);
   else render();
 }
+
+/* ============== FIRESTORE SYNC (bridge ke module script di <head>) ==============
+   pushStateToFirestore() dipanggil dari persist()/persistSpg() setiap ada perubahan
+   (editable target, import file, dst) — di-debounce 700ms supaya ga nembak Firestore
+   tiap keystroke. applyRemoteState() dipanggil waktu data awal Firestore diterima,
+   atau waktu ada perubahan live dari device/tab lain (via onSnapshot). Kalau Firestore
+   belum siap / gagal (mis. rules belum diatur), dashboard tetap jalan normal pakai
+   localStorage seperti biasa — Firestore murni lapisan tambahan, bukan syarat. */
+let firestoreRefs = null;
+let fsSaveTimer = null;
+let lastPushedSignature = null;
+
+function setSyncStatus(mode){
+  const el = document.getElementById('syncStatus');
+  if(!el) return;
+  if(mode === 'online'){ el.textContent = '● Live sync aktif'; el.className = 'sync-badge sync-online'; }
+  else if(mode === 'error'){ el.textContent = '● Sync gagal (cek Firestore rules)'; el.className = 'sync-badge sync-error'; }
+  else { el.textContent = '● Lokal saja (belum sync)'; el.className = 'sync-badge sync-offline'; }
+}
+
+function currentFullState(){
+  return { data, detailData: DETAIL_DATA, monthlyData: MONTHLY_DATA, spgData: SPG_DATA, updatedAt: Date.now() };
+}
+
+function pushStateToFirestore(){
+  if(!firestoreRefs) return; // Firestore belum siap / tidak dikonfigurasi — localStorage tetap jalan
+  clearTimeout(fsSaveTimer);
+  fsSaveTimer = setTimeout(async () => {
+    try{
+      const state = currentFullState();
+      lastPushedSignature = JSON.stringify(state);
+      await firestoreRefs.setDoc(firestoreRefs.docRef, state);
+      setSyncStatus('online');
+    }catch(e){
+      console.error('Gagal sync ke Firestore:', e);
+      setSyncStatus('error');
+    }
+  }, 700);
+}
+
+function applyRemoteState(remote){
+  if(!remote) return;
+  const incomingSignature = JSON.stringify(remote);
+  if(incomingSignature === lastPushedSignature) return; // gema dari write kita sendiri, skip re-render
+  if(remote.data) data = remote.data;
+  if(remote.detailData) DETAIL_DATA = remote.detailData;
+  if(remote.monthlyData) MONTHLY_DATA = remote.monthlyData;
+  if(remote.spgData) SPG_DATA = remote.spgData;
+  try{
+    localStorage.setItem('insentif_mpo_data_v15', JSON.stringify(data));
+    localStorage.setItem('insentif_mpo_detail_v15', JSON.stringify(DETAIL_DATA));
+    localStorage.setItem('insentif_mpo_monthly_v15', JSON.stringify(MONTHLY_DATA));
+    localStorage.setItem('insentif_mpo_spg_v15', JSON.stringify(SPG_DATA));
+  }catch(e){ console.error(e); }
+  renderTabs();
+  render();
+}
+
+window.onFirebaseReady = async function(refs){
+  firestoreRefs = refs;
+  try{
+    const snap = await refs.getDoc(refs.docRef);
+    if(snap.exists()){
+      applyRemoteState(snap.data());
+    } else {
+      pushStateToFirestore(); // belum ada dokumen di Firestore — kirim state lokal sebagai seed awal
+    }
+    setSyncStatus('online');
+    refs.onSnapshot(refs.docRef, (snap2) => {
+      if(snap2.exists()) applyRemoteState(snap2.data());
+    }, (err) => {
+      console.error('Firestore listen error:', err);
+      setSyncStatus('error');
+    });
+  }catch(e){
+    console.error('Firestore init gagal (mungkin rules belum diatur):', e);
+    setSyncStatus('error');
+  }
+};
 
 loadData();
 loadSpgData();
