@@ -378,6 +378,12 @@ function updateStayMult(idx, value){
   render();
 }
 
+const STAY_MULT_PRESETS = [2, 1.5, 1, 0.7, 0.66, 0.5, 0.33, 0.3];
+function stayMultOptionsHtml(current){
+  const opts = STAY_MULT_PRESETS.includes(current) ? STAY_MULT_PRESETS : [...STAY_MULT_PRESETS, current].sort((a,b) => b-a);
+  return opts.map(v => `<option value="${v}" ${v===current?'selected':''}>${v}</option>`).join('');
+}
+
 // Tier efektif untuk outlet tsb: threshold DAN incentive-nya sudah dikalikan
 // pengali outlet (kalau ada). Untuk outlet biasa (mult=1) sama persis dengan skema asli.
 function tiersForOutlet(catKey, scheme, toko){
@@ -1227,12 +1233,7 @@ function render(skipSubtitle){
     const stayMult = num(row.stayMult) > 0 ? num(row.stayMult) : 1;
     let cells = `<td>${idx+1}</td><td class="col-name">${row.toko}</td>
       <td onclick="event.stopPropagation()">
-        <select class="stay-select" onchange="updateStayMult(${idx}, this.value)">
-          <option value="2" ${stayMult===2?'selected':''}>2</option>
-          <option value="1.5" ${stayMult===1.5?'selected':''}>1.5</option>
-          <option value="1" ${stayMult===1?'selected':''}>1</option>
-          <option value="0.5" ${stayMult===0.5?'selected':''}>0.5</option>
-        </select>
+        <select class="stay-select" onchange="updateStayMult(${idx}, this.value)">${stayMultOptionsHtml(stayMult)}</select>
       </td>`;
     if(INCENTIVE_SCHEME[cat.key]){
       cells += `<td>${strataCellHtml(idx, cat.key, c.target, actual, INCENTIVE_SCHEME, 'updateTargetStrata', row.toko)}</td>`;
