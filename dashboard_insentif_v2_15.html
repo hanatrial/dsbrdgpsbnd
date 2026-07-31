@@ -721,8 +721,11 @@ function spgStoreSelectHtml(outlets, selected, onchange){
 function calcSpgIncentive(spg, outlets, region, catKey, quarter){
   const row1 = outlets.find(r => r.toko === spg.s1);
   const row2 = outlets.find(r => r.toko === spg.s2);
-  const p1 = (num(spg.h1)||0) / SPG_TOTAL_DAYS;
-  const p2 = (num(spg.h2)||0) / SPG_TOTAL_DAYS;
+  // Stay SPG toko = total "man-days" yang dibagi (mis. 2 = 12 hari-orang, 0.5 = 3
+  // hari-orang), sedangkan tiap SPG maksimal 6 hari sendiri — jadi porsinya
+  // dihitung dari hari dia dibagi total hari-orang toko itu, bukan dibagi 6 saja.
+  const p1 = (num(spg.h1)||0) / (SPG_TOTAL_DAYS * (row1 ? outletMultiplier(row1.toko) : 1));
+  const p2 = (num(spg.h2)||0) / (SPG_TOTAL_DAYS * (row2 ? outletMultiplier(row2.toko) : 1));
   let val = 0;
   if(row1) val += (quarter ? calcRowIncentiveQuarter(row1, catKey, region) : calcRowIncentive(row1, catKey)) * p1;
   if(row2) val += (quarter ? calcRowIncentiveQuarter(row2, catKey, region) : calcRowIncentive(row2, catKey)) * p2;
