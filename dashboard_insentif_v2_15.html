@@ -1425,7 +1425,7 @@ document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 let currentImportSource = 'bsp';
 
 function resetChannelsToZero(){
-  const cats = ['all','oil','porang','platinum','milk','school','teen','nspolos'];
+  const cats = ['all','oil','porang','platinum','milk','school','teen','nspolos','granola'];
   ['makassar','kendari'].forEach(region => {
     data[region].forEach(row => {
       cats.forEach(cat => { row[cat].ch1 = 0; row[cat].ch2 = 0; });
@@ -1572,10 +1572,12 @@ const isMilkItem = i => { const u=U(i); return u.includes('DIAB') && u.includes(
 const isSchoolItem = i => { const u=U(i); return u.includes('SCHOOL') && (u.includes('HILO')||u.includes('HI LO')||u.includes('HI-LO')); };
 const isTeenItem = i => { const u=U(i); return u.includes('TEEN') && (u.includes('HILO')||u.includes('HI LO')||u.includes('HI-LO')); };
 const isNsPolosItem = i => { const u=U(i); return u.includes('PLS') && (u.startsWith('NS')||u.startsWith("N'SARI")); };
+const isGranolaItem = i => { const u=U(i); return u.includes('GRANOLA') || u.includes('MOONLIGHT') || u.includes('CLEAR PROTEIN'); };
 
 const CAT_CLASSIFIERS = {
   oil: isOilItem, porang: isPorangItem, platinum: isPlatinumItem,
-  milk: isMilkItem, school: isSchoolItem, teen: isTeenItem, nspolos: isNsPolosItem
+  milk: isMilkItem, school: isSchoolItem, teen: isTeenItem, nspolos: isNsPolosItem,
+  granola: isGranolaItem
 };
 
 function findHeaderIndex(headerRow, candidates){
@@ -1775,7 +1777,7 @@ function importBSP(rows, wb){
     const cleanOutlet = m ? m[1].trim() : outlet;
     const match = findOutletExactBSP(cleanOutlet, region);
     if(!match) continue;
-    sums[match.toko] = sums[match.toko] || {all:0,oil:0,porang:0,platinum:0,milk:0,school:0,teen:0,nspolos:0};
+    sums[match.toko] = sums[match.toko] || {all:0,oil:0,porang:0,platinum:0,milk:0,school:0,teen:0,nspolos:0,granola:0};
     sums[match.toko].all += netto;
     for(const [cat,fn] of Object.entries(CAT_CLASSIFIERS)){
       if(fn(item)){
@@ -1898,9 +1900,9 @@ function importMatakar(rows, wb){
     if(!customer || !item) continue;
     const match = findOutletRow(customer, region);
     if(!match) continue;
-    sums[match.toko] = sums[match.toko] || {all:0,oil:0,porang:0,platinum:0,milk:0,school:0,teen:0};
+    sums[match.toko] = sums[match.toko] || {all:0,oil:0,porang:0,platinum:0,milk:0,school:0,teen:0,granola:0};
     sums[match.toko].all += net;
-    for(const cat of ['oil','porang','platinum','milk','school','teen']){
+    for(const cat of ['oil','porang','platinum','milk','school','teen','granola']){
       if(CAT_CLASSIFIERS[cat](item)){
         sums[match.toko][cat] += net;
         details[match.toko] = details[match.toko] || {};
@@ -1934,7 +1936,7 @@ function applyImportedSums(sums, channelField, onlyCats, region, monthKey){
   outlets.forEach(row => {
     const s = sums[row.toko];
     if(!s) return;
-    const cats = onlyCats || ['all','oil','porang','platinum','milk','school','teen','nspolos'];
+    const cats = onlyCats || ['all','oil','porang','platinum','milk','school','teen','nspolos','granola'];
     cats.forEach(cat => {
       if(s[cat] !== undefined){
         const val = Math.round(s[cat]*100)/100;
