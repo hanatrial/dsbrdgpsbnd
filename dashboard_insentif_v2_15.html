@@ -1137,7 +1137,7 @@ function categoryHasBcp(catKey){
 // Oil & Milk (Diabetix)/Sudia tidak punya skema Quarter sama sekali — jadi grup
 // kolom Quarter (Total Quarter / Target Quarter / Insentif Quarter) disembunyikan
 // sepenuhnya buat kedua kategori ini, bukan cuma ditampilkan sebagai "—".
-const HIDE_QUARTER_CATS = ['oil', 'milk', 'nspolos', 'granola'];
+const HIDE_QUARTER_CATS = ['all', 'oil', 'milk', 'nspolos', 'granola'];
 function categoryHasQuarter(catKey){
   return !HIDE_QUARTER_CATS.includes(catKey);
 }
