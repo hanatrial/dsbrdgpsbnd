@@ -82,7 +82,14 @@
   .tabs button:hover{transform:translateY(-1px);color:var(--text);border-color:rgba(20,22,30,.14);}
   .tabs button.active{background:var(--text);color:#fff;border-color:var(--text);box-shadow:var(--shadow-md);}
   .tabs button.tab-performance{border-color:var(--accent);color:var(--accent);font-weight:700;margin-left:6px;}
-  .spg-store-select{max-width:130px;width:130px;font-size:12px;}
+  .spg-store-select{max-width:170px;width:170px;font-size:12.5px;font-weight:600;color:var(--text);
+    background:var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%237a6cf0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat right 12px center;
+    border:1px solid var(--border);border-radius:12px;padding:9px 30px 9px 12px;appearance:none;-webkit-appearance:none;
+    cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:border-color .35s var(--ease), box-shadow .35s var(--ease), transform .35s var(--ease);}
+  .spg-store-select:hover{border-color:var(--accent);transform:translateY(-1px);}
+  .spg-store-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(75,61,246,.12);}
+  .spg-store-select:invalid, .spg-store-select.spg-empty{color:var(--sub);font-weight:500;}
   .spg-q-cell{background:rgba(125,108,255,.06);}
   .sync-badge{display:inline-flex;align-items:center;gap:5px;margin-top:6px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;letter-spacing:.01em;}
   .sync-badge.sync-online{color:var(--good);background:var(--good-bg);}
@@ -706,6 +713,11 @@ function spgStoreOptions(outlets, selected){
     outlets.map(o => `<option value="${o.toko}" ${o.toko===selected?'selected':''}>${o.toko}</option>`).join('');
 }
 
+function spgStoreSelectHtml(outlets, selected, onchange){
+  const cls = selected ? 'spg-store-select' : 'spg-store-select spg-empty';
+  return `<select class="${cls}" title="${selected||'Belum dipilih'}" onchange="this.classList.toggle('spg-empty', !this.value); ${onchange}">${spgStoreOptions(outlets, selected)}</select>`;
+}
+
 function calcSpgIncentive(spg, outlets, region, catKey, quarter){
   const row1 = outlets.find(r => r.toko === spg.s1);
   const row2 = outlets.find(r => r.toko === spg.s2);
@@ -763,9 +775,9 @@ function renderSpgTable(skipSubtitle){
     const tr = document.createElement('tr');
     let cells = `<td>${idx+1}</td>`;
     cells += `<td><input type="text" class="target-input" style="min-width:140px" value="${spg.name}" onchange="updateSpgName('${region}',${idx},this.value)"></td>`;
-    cells += `<td><select class="spg-store-select" onchange="updateSpgStore('${region}',${idx},'s1',this.value)">${spgStoreOptions(outlets, spg.s1)}</select></td>`;
+    cells += `<td>${spgStoreSelectHtml(outlets, spg.s1, `updateSpgStore('${region}',${idx},'s1',this.value)`)}</td>`;
     cells += `<td><input type="number" min="0" max="${SPG_TOTAL_DAYS}" step="0.5" value="${spg.h1}" style="width:52px" onchange="updateSpgHari('${region}',${idx},'h1',this.value)"></td>`;
-    cells += `<td><select class="spg-store-select" onchange="updateSpgStore('${region}',${idx},'s2',this.value)">${spgStoreOptions(outlets, spg.s2)}</select></td>`;
+    cells += `<td>${spgStoreSelectHtml(outlets, spg.s2, `updateSpgStore('${region}',${idx},'s2',this.value)`)}</td>`;
     cells += `<td><input type="number" min="0" max="${SPG_TOTAL_DAYS}" step="0.5" value="${spg.h2}" style="width:52px" onchange="updateSpgHari('${region}',${idx},'h2',this.value)"></td>`;
     bulananVals.forEach(v => { cells += `<td>${fmt(v)}</td>`; });
     cells += `<td style="font-weight:700">${fmt(totalBulanan)}</td>`;
