@@ -1572,7 +1572,7 @@ const isMilkItem = i => { const u=U(i); return u.includes('DIAB') && u.includes(
 const isSchoolItem = i => { const u=U(i); return u.includes('SCHOOL') && (u.includes('HILO')||u.includes('HI LO')||u.includes('HI-LO')); };
 const isTeenItem = i => { const u=U(i); return u.includes('TEEN') && (u.includes('HILO')||u.includes('HI LO')||u.includes('HI-LO')); };
 const isNsPolosItem = i => { const u=U(i); return u.includes('PLS') && (u.startsWith('NS')||u.startsWith("N'SARI")); };
-const isGranolaItem = i => { const u=U(i); return u.includes('GRANOLA') || u.includes('MOONLIGHT') || u.includes('CLEAR PROTEIN'); };
+const isGranolaItem = i => { const u=U(i); return u.includes('GRANOLA') || u.includes('MOONLIGHT') || u.includes('CLEAR PROT'); };
 
 const CAT_CLASSIFIERS = {
   oil: isOilItem, porang: isPorangItem, platinum: isPlatinumItem,
