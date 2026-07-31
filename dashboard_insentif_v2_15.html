@@ -142,6 +142,8 @@
   .strata-mini .strata-ladder i{height:3px;}
   .edit-btn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:3px 6px;border-radius:7px;transition:background .3s var(--ease);}
   .edit-btn:hover{background:rgba(75,61,246,.1);}
+  .stay-select{width:56px;min-width:56px;padding:5px 4px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--accent);font-weight:800;font-size:12.5px;text-align:center;cursor:pointer;}
+  .stay-select:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(75,61,246,.12);}
 
   /* ---------- Import panel ---------- */
   .import-panel{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;background:var(--shell);border:1px solid var(--border);border-radius:20px;padding:12px 14px;box-shadow:var(--shadow-sm);}
@@ -337,23 +339,27 @@ function calcIncentive(catKey, actual, scheme){
   return calcIncentiveTiers((scheme || INCENTIVE_SCHEME)[catKey], actual);
 }
 
-/* ============== MULTIPLIER INSENTIF KHUSUS PER OUTLET ==============
-   Beberapa toko punya kesepakatan pengali tersendiri di luar skema standar —
-   BUKAN cuma nilai insentif Rp-nya yang dikalikan, TARGET (tier threshold) buat
-   naik strata juga ikut dikalikan sama besar (target lebih berat, payout lebih
-   besar, konsisten satu sama lain):
-     - SATU SAMA JAYA ABADI PT (Landak)         → x2
-     - SATU SAMA JAYA ABADI PERINTIS  PT        → x1.5
-     - SATU SAMA JAYA ABADI HERTASNING  PT      → x1.5
-   Berlaku untuk skema Bulanan maupun Quarter. */
-const OUTLET_INCENTIVE_MULTIPLIER = {
-  "SATU SAMA JAYA ABADI PT": 2,
-  "SATU SAMA JAYA ABADI PERINTIS  PT": 1.5,
-  "SATU SAMA JAYA ABADI HERTASNING  PT": 1.5
-};
+/* ============== MULTIPLIER INSENTIF: "STAY SPG" PER OUTLET ==============
+   Ganti skema pengali tetap per nama toko dengan pengali yang bisa diatur
+   bebas per toko lewat kolom "Stay SPG" di tabel (nilai 2 / 1 / 0.5, sesuai
+   berapa banyak/proporsi SPG yang stay di toko itu). Pengali ini dikalikan
+   ke TARGET (tier threshold) dan ke nilai insentif Rp-nya sekaligus, berlaku
+   untuk skema Bulanan maupun Quarter. Disimpan di row.stayMult (default 1). */
+function findRowByToko(toko){
+  return (data.makassar||[]).find(r => r.toko === toko) || (data.kendari||[]).find(r => r.toko === toko);
+}
 
 function outletMultiplier(toko){
-  return OUTLET_INCENTIVE_MULTIPLIER[toko] || 1;
+  const row = findRowByToko(toko);
+  const m = row ? num(row.stayMult) : 0;
+  return m > 0 ? m : 1;
+}
+
+function updateStayMult(idx, value){
+  const row = getOutlets()[idx];
+  row.stayMult = parseFloat(value) || 1;
+  persist();
+  render();
 }
 
 // Tier efektif untuk outlet tsb: threshold DAN incentive-nya sudah dikalikan
@@ -1000,13 +1006,7 @@ function startEditTarget(idx){
 }
 
 function finishEditTarget(idx){
-  const view = document.getElementById('target-view-'+idx);
-  const edit = document.getElementById('target-edit-'+idx);
-  if(!view || !edit) return;
-  reformatInput(edit);
-  view.textContent = edit.value;
-  edit.style.display = 'none';
-  view.style.display = 'inline';
+  render();
 }
 
 function updateVal(idx, field, value){
@@ -1161,7 +1161,7 @@ function render(skipSubtitle){
   // THEAD — grup Bulanan lalu grup Quarter
   const quarter = getActiveQuarter();
   const thead = document.getElementById('thead');
-  let headCols = ['#','Nama Toko', cat.target + (INCENTIVE_SCHEME[cat.key] ? ' (Strata)' : ''), ch.ch1];
+  let headCols = ['#','Nama Toko', 'Stay SPG', cat.target + (INCENTIVE_SCHEME[cat.key] ? ' (Strata)' : ''), ch.ch1];
   if(showBcp) headCols.push(ch.ch2);
   headCols.push('Total', '% Capaian', 'Insentif Bulanan');
   if(showQuarter) headCols.push(`Total ${quarter.label}`, 'Target Quarter (Strata)', 'Insentif Quarter');
@@ -1200,7 +1200,15 @@ function render(skipSubtitle){
       tr.title = 'Klik untuk lihat rincian transaksi';
       tr.onclick = () => openDetail(idx);
     }
-    let cells = `<td>${idx+1}</td><td class="col-name">${row.toko}</td>`;
+    const stayMult = num(row.stayMult) > 0 ? num(row.stayMult) : 1;
+    let cells = `<td>${idx+1}</td><td class="col-name">${row.toko}</td>
+      <td onclick="event.stopPropagation()">
+        <select class="stay-select" onchange="updateStayMult(${idx}, this.value)">
+          <option value="2" ${stayMult===2?'selected':''}>2</option>
+          <option value="1" ${stayMult===1?'selected':''}>1</option>
+          <option value="0.5" ${stayMult===0.5?'selected':''}>0.5</option>
+        </select>
+      </td>`;
     if(INCENTIVE_SCHEME[cat.key]){
       cells += `<td>${strataCellHtml(idx, cat.key, c.target, actual, INCENTIVE_SCHEME, 'updateTargetStrata', row.toko)}</td>`;
     } else {
@@ -1230,7 +1238,7 @@ function render(skipSubtitle){
   // TFOOT
   const tfoot = document.getElementById('tfoot');
   const avgPct = pctCount ? (pctSum/pctCount) : 0;
-  let footCells = `<td colspan="2" style="text-align:right">TOTAL</td><td>${fmt(totalTarget)}</td><td>${fmt(totalCh1)}</td>`;
+  let footCells = `<td colspan="3" style="text-align:right">TOTAL</td><td>${fmt(totalTarget)}</td><td>${fmt(totalCh1)}</td>`;
   if(showBcp) footCells += `<td>${fmt(totalCh2)}</td>`;
   footCells += `<td>${fmt(totalActual)}</td><td>${avgPct.toFixed(1)}%</td><td>${fmt(totalIncentive)}</td>`;
   if(showQuarter) footCells += `<td>${cat.key === 'all' ? '&mdash;' : fmt(totalActualQ)}</td><td></td><td>${fmt(totalIncentiveQ)}</td>`;
