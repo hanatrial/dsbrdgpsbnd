@@ -160,6 +160,11 @@
   .stay-select{width:56px;min-width:56px;padding:5px 4px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--accent);font-weight:800;font-size:12.5px;text-align:center;cursor:pointer;}
   .stay-select:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(75,61,246,.12);}
 
+  /* ---------- Lihat Bulan (view historis) ---------- */
+  .view-month-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:10px 14px;box-shadow:var(--shadow-sm);}
+  .view-month-bar .vmb-label{font-size:12.5px;font-weight:700;color:var(--sub);}
+  .view-month-bar .vmb-hint{font-size:12px;color:var(--accent);font-weight:600;}
+
   /* ---------- Import panel ---------- */
   .import-panel{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;background:var(--shell);border:1px solid var(--border);border-radius:20px;padding:12px 14px;box-shadow:var(--shadow-sm);}
   .import-toggle{display:flex;gap:3px;background:var(--bg2);border-radius:999px;padding:4px;}
@@ -256,6 +261,12 @@
   </header>
 
   <div class="tabs reveal" id="tabs"></div>
+
+  <div class="view-month-bar reveal" id="viewMonthBar">
+    <span class="vmb-label">📅 Lihat data bulan</span>
+    <select id="viewMonth" class="month-select" onchange="switchViewMonth(this.value)" title="Ganti tampilan tabel ke bulan lain (read-only, data tidak berubah)"></select>
+    <span class="vmb-hint" id="viewMonthHint"></span>
+  </div>
 
   <div class="cards reveal" id="cards"></div>
 
@@ -459,6 +470,82 @@ function getMonthlyActual(region, toko, monthKey, catKey){
   const rec = MONTHLY_DATA[region] && MONTHLY_DATA[region][toko] && MONTHLY_DATA[region][toko][monthKey] && MONTHLY_DATA[region][toko][monthKey][catKey];
   if(!rec) return 0;
   return num(rec.ch1) + num(rec.ch2);
+}
+
+/* ============== LIHAT BULAN (VIEW HISTORIS) ==============
+   Tabel utama normalnya nampilin "bulan berjalan" (row.ch1/ch2 live).
+   Begitu kalender pindah bulan (mis. Juli -> Agustus), angka Juli TETAP
+   tersimpan aman di MONTHLY_DATA (sudah dipersist terpisah dari row.ch1/ch2,
+   dan Reset ke 0 cuma nge-nolin row.ch1/ch2 bulan berjalan, bukan MONTHLY_DATA)
+   — tapi user butuh cara buat NGELIAT lagi bulan yang udah lewat. Dropdown ini
+   nggak ngubah data sama sekali, cuma switch apa yang ditampilkan di tabel. */
+let currentViewMonth = todayMonthKey();
+
+function getViewableMonths(){
+  const months = [];
+  let y = 2026, m = 2; // mulai dari bulan pertama yang ada datanya
+  const todayKey = todayMonthKey();
+  for(let i=0; i<48; i++){
+    const key = y + '-' + String(m).padStart(2,'0');
+    months.push(key);
+    if(key === todayKey) break;
+    m++; if(m>12){ m=1; y++; }
+  }
+  if(!months.includes(todayKey)) months.push(todayKey);
+  return months;
+}
+
+function isViewingCurrentMonth(){ return currentViewMonth === todayMonthKey(); }
+
+// Ambil {ch1,ch2} buat outlet+kategori sesuai bulan yang lagi dilihat —
+// bulan berjalan pakai data live row, bulan lain pakai arsip MONTHLY_DATA.
+function getRowChannels(region, row, catKey){
+  if(isViewingCurrentMonth()){
+    const c = row[catKey] || {};
+    return { ch1: num(c.ch1), ch2: num(c.ch2) };
+  }
+  const rec = MONTHLY_DATA[region] && MONTHLY_DATA[region][row.toko] && MONTHLY_DATA[region][row.toko][currentViewMonth] && MONTHLY_DATA[region][row.toko][currentViewMonth][catKey];
+  return { ch1: num(rec && rec.ch1), ch2: num(rec && rec.ch2) };
+}
+
+// Bikin "shadow row" — sama persis row aslinya (target/targetQ/stayMult ikut),
+// tapi ch1/ch2 tiap kategori diganti sesuai bulan yang lagi di-browse. Dipakai
+// supaya calcRowIncentive/calcRowIncentiveQuarter otomatis hitung pakai actual
+// bulan itu tanpa perlu duplikasi logic tier.
+function rowForViewMonth(region, row){
+  if(isViewingCurrentMonth()) return row;
+  const shadow = { toko: row.toko, stayMult: row.stayMult };
+  CATEGORIES.forEach(cat => {
+    if(cat.key === 'all') return;
+    const orig = row[cat.key] || {};
+    const chans = getRowChannels(region, row, cat.key);
+    shadow[cat.key] = Object.assign({}, orig, chans);
+  });
+  return shadow;
+}
+
+function switchViewMonth(val){
+  currentViewMonth = val;
+  render();
+}
+
+function initViewMonthUI(){
+  const months = getViewableMonths();
+  const today = todayMonthKey();
+  const sel = document.getElementById('viewMonth');
+  if(!sel) return;
+  if(!months.includes(currentViewMonth)) currentViewMonth = today;
+  sel.innerHTML = months.slice().reverse().map(m => {
+    const tag = m === today ? ' (bulan ini)' : '';
+    return `<option value="${m}" ${m===currentViewMonth?'selected':''}>${monthLabel(m)}${tag}</option>`;
+  }).join('');
+  const hint = document.getElementById('viewMonthHint');
+  if(hint){
+    hint.textContent = isViewingCurrentMonth()
+      ? ''
+      : `Menampilkan data historis ${monthLabel(currentViewMonth)} (read-only) — data bulan ini tetap aman tersimpan, tidak hilang & tidak bisa ke-reset dari sini.`;
+    hint.style.display = isViewingCurrentMonth() ? 'none' : 'inline';
+  }
 }
 
 function setMonthlyValue(region, toko, monthKey, catKey, channelField, val){
@@ -1173,8 +1260,11 @@ function categoryHasQuarter(catKey){
 }
 
 function render(skipSubtitle){
-  if(currentCat === '__performance__'){ renderPerformanceTable(skipSubtitle); return; }
-  if(currentCat === '__spg__'){ renderSpgTable(skipSubtitle); return; }
+  const viewMonthBar = document.getElementById('viewMonthBar');
+  if(currentCat === '__performance__'){ if(viewMonthBar) viewMonthBar.style.display = 'none'; renderPerformanceTable(skipSubtitle); return; }
+  if(currentCat === '__spg__'){ if(viewMonthBar) viewMonthBar.style.display = 'none'; renderSpgTable(skipSubtitle); return; }
+  if(viewMonthBar) viewMonthBar.style.display = '';
+  initViewMonthUI();
   const region = currentRegion;
   const cat = getCatConf();
   const outlets = getOutlets();
@@ -1203,32 +1293,39 @@ function render(skipSubtitle){
   let totalTarget=0, totalActual=0, totalCh1=0, totalCh2=0, pctSum=0, pctCount=0,
       totalIncentive=0, totalIncentiveQ=0, totalActualQ=0;
 
+  const viewingCurrent = isViewingCurrentMonth();
   outlets.forEach((row, idx) => {
     const c = row[cat.key];
     const target = num(c.target);
-    const actual = num(c.ch1) + num(c.ch2);
+    const chans = getRowChannels(region, row, cat.key);
+    const actual = chans.ch1 + chans.ch2;
     const pct = target > 0 ? (actual/target*100) : 0;
-    const incentive = calcRowIncentive(row, cat.key);
+    const shadowRow = rowForViewMonth(region, row);
+    const incentive = calcRowIncentive(shadowRow, cat.key);
     const incentiveQ = calcRowIncentiveQuarter(row, cat.key);
     const actualQ = cat.key === 'all' ? 0 : calcQuarterActual(region, row, cat.key);
 
     totalTarget += target;
     totalActual += actual;
-    totalCh1 += num(c.ch1);
-    totalCh2 += num(c.ch2);
+    totalCh1 += chans.ch1;
+    totalCh2 += chans.ch2;
     totalIncentive += incentive;
     totalIncentiveQ += incentiveQ;
     totalActualQ += actualQ;
     if(target>0){ pctSum += pct; pctCount++; }
 
     const tr = document.createElement('tr');
-    tr.classList.add('clickable');
-    if(cat.key === 'all'){
-      tr.title = 'Klik untuk lihat ringkasan semua kategori';
-      tr.onclick = () => openAllSummary(idx);
+    if(viewingCurrent){
+      tr.classList.add('clickable');
+      if(cat.key === 'all'){
+        tr.title = 'Klik untuk lihat ringkasan semua kategori';
+        tr.onclick = () => openAllSummary(idx);
+      } else {
+        tr.title = 'Klik untuk lihat rincian transaksi';
+        tr.onclick = () => openDetail(idx);
+      }
     } else {
-      tr.title = 'Klik untuk lihat rincian transaksi';
-      tr.onclick = () => openDetail(idx);
+      tr.title = 'Rincian item per distributor hanya tersimpan untuk bulan berjalan';
     }
     const stayMult = num(row.stayMult) > 0 ? num(row.stayMult) : 1;
     let cells = `<td>${idx+1}</td><td class="col-name">${row.toko}</td>
@@ -1244,8 +1341,8 @@ function render(skipSubtitle){
           <button class="edit-btn" onclick="event.stopPropagation(); startEditTarget(${idx})" title="Edit target">✎</button>
         </td>`;
     }
-    cells += `<td>${fmt(c.ch1)}</td>`;
-    if(showBcp) cells += `<td>${fmt(c.ch2)}</td>`;
+    cells += `<td>${fmt(chans.ch1)}</td>`;
+    if(showBcp) cells += `<td>${fmt(chans.ch2)}</td>`;
     cells += `<td>${fmt(actual)}</td>`;
     cells += `<td><span class="pct-bar"><span class="pct-fill" style="width:${Math.min(pct,100)}%"></span></span>
               <span class="badge ${pctBadgeClass(pct)}">${pct.toFixed(1)}%</span></td>`;
@@ -2042,6 +2139,7 @@ loadData();
 loadSpgData();
 switchImportSource('bsp');
 initImportMonthUI();
+initViewMonthUI();
 renderTabs();
 render();
 </script>
