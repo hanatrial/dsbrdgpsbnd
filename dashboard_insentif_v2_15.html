@@ -1447,16 +1447,19 @@ function switchImportMonth(val){
 function initImportMonthUI(){
   const quarter = getActiveQuarter();
   const today = todayMonthKey();
-  if(!quarter.months.includes(currentImportMonth)){
-    currentImportMonth = quarter.months.includes(today) ? today : quarter.months[quarter.months.length-1];
-  }
+  // Boleh pilih bulan APA SAJA dari Feb 2026 s/d bulan berjalan buat "Bulan
+  // Import" — bukan cuma 3 bulan quarter aktif — supaya kalau kalender udah
+  // pindah ke bulan baru (mis. Agustus), user tetap bisa re-import/lengkapin
+  // data bulan sebelumnya (mis. Juli) tanpa nimpa data bulan berjalan.
+  const months = getViewableMonths();
+  if(!months.includes(currentImportMonth)) currentImportMonth = today;
   const sel = document.getElementById('importMonth');
-  sel.innerHTML = quarter.months.map(m => {
+  sel.innerHTML = months.slice().reverse().map(m => {
     const tag = m === today ? ' (bulan ini)' : '';
     return `<option value="${m}" ${m===currentImportMonth?'selected':''}>${monthLabel(m)}${tag}</option>`;
   }).join('');
   document.getElementById('quarterHint').innerHTML =
-    `Periode Quarter aktif: <b>${quarter.label}</b> &middot; pilih "Bulan Import" di atas sebelum meng-upload file untuk bulan-bulan sebelumnya dalam periode ini — Insentif Quarter dihitung dari total 3 bulan tersebut, bukan kuartal kalender biasa.`;
+    `Periode Quarter aktif: <b>${quarter.label}</b> &middot; pilih "Bulan Import" di atas sesuai bulan file yang mau di-upload (bisa bulan yang udah lewat juga, mis. buat lengkapin/koreksi data bulan sebelumnya) — Insentif Quarter dihitung dari total 3 bulan periode aktif, bukan kuartal kalender biasa.`;
 }
 
 function switchImportSource(src){
