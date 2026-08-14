@@ -125,6 +125,13 @@
   /* ---------- Table shell (double bezel) ---------- */
   .table-shell{background:rgba(20,22,30,.035);border:1px solid var(--border-soft);border-radius:26px;padding:8px;box-shadow:var(--shadow-sm);}
   .table-scroll{overflow-x:auto;border-radius:20px;background:var(--surface);box-shadow:inset 0 1px 1px rgba(255,255,255,.7);}
+
+  /* ---------- Ringkasan Toko (semua toko, tanpa klik) ---------- */
+  .alt-view{display:flex;flex-direction:column;gap:16px;}
+  .allsum-card{background:var(--surface);border:1px solid var(--border-soft);border-radius:22px;padding:18px 18px 16px;box-shadow:var(--shadow-sm);}
+  .allsum-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .allsum-head h3{margin:0;font-size:15px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+  .allsum-card .table-scroll{background:transparent;box-shadow:none;border-radius:0;}
   table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px;}
   thead th{background:transparent;color:var(--sub);text-align:left;padding:14px 14px;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;border-bottom:1px solid var(--border);}
   tbody td{padding:11px 14px;border-top:1px solid var(--border-soft);}
@@ -284,7 +291,7 @@
   </div>
   <div class="quarter-hint reveal" id="quarterHint"></div>
 
-  <div class="table-shell reveal">
+  <div class="table-shell reveal" id="tableShell">
     <div class="table-scroll">
       <table>
         <thead id="thead"></thead>
@@ -293,6 +300,7 @@
       </table>
     </div>
   </div>
+  <div class="alt-view reveal" id="altView" style="display:none;"></div>
 </div>
 
 <div id="modalOverlay" class="modal-overlay" style="display:none;" onclick="if(event.target===this) closeModal()">
@@ -1081,6 +1089,12 @@ function renderTabs(){
     b.onclick = () => { currentCat = cat.key; renderTabs(); render(); };
     tabs.appendChild(b);
   });
+  const allSumBtn = document.createElement('button');
+  allSumBtn.textContent = '📋 RINGKASAN TOKO';
+  allSumBtn.className = (currentCat === '__allsummary__' ? 'active' : '') + ' tab-performance';
+  allSumBtn.onclick = () => { currentCat = '__allsummary__'; renderTabs(); render(); };
+  tabs.appendChild(allSumBtn);
+
   const perfBtn = document.createElement('button');
   perfBtn.textContent = '📊 PERFORMANCE';
   perfBtn.className = (currentCat === '__performance__' ? 'active' : '') + ' tab-performance';
@@ -1261,6 +1275,17 @@ function categoryHasQuarter(catKey){
 
 function render(skipSubtitle){
   const viewMonthBar = document.getElementById('viewMonthBar');
+  const tableShell = document.getElementById('tableShell');
+  const altView = document.getElementById('altView');
+  if(currentCat === '__allsummary__'){
+    if(viewMonthBar) viewMonthBar.style.display = 'none';
+    if(tableShell) tableShell.style.display = 'none';
+    if(altView) altView.style.display = '';
+    renderAllSummaryTable(skipSubtitle);
+    return;
+  }
+  if(tableShell) tableShell.style.display = '';
+  if(altView) altView.style.display = 'none';
   if(currentCat === '__performance__'){ if(viewMonthBar) viewMonthBar.style.display = 'none'; renderPerformanceTable(skipSubtitle); return; }
   if(currentCat === '__spg__'){ if(viewMonthBar) viewMonthBar.style.display = 'none'; renderSpgTable(skipSubtitle); return; }
   if(viewMonthBar) viewMonthBar.style.display = '';
@@ -1407,16 +1432,10 @@ function renderChannelSection(label, itemsObj){
   return html;
 }
 
-function openAllSummary(idx){
-  const region = currentRegion;
-  const row = getOutlets()[idx];
-  const ch = REGION_CHANNELS[region];
-
-  document.querySelector('.modal-box').classList.add('wide');
-  document.getElementById('modalTitle').textContent = row.toko;
-  document.getElementById('modalSub').textContent = (region==='makassar' ? 'Makassar' : 'Kendari') + ' · Ringkasan pencapaian semua kategori';
-
-  let rows = '';
+// Dipakai bareng sama openAllSummary (di dalam modal) dan renderAllSummaryTable
+// (tab "RINGKASAN TOKO", nampilin semua toko sekaligus tanpa perlu klik).
+function buildAllSummaryRows(region, row){
+  let rowsHtml = '';
   let totalIncentive = 0, totalIncentiveQ = 0;
   CATEGORIES.forEach(cat => {
     if(cat.key === 'all') return;
@@ -1432,7 +1451,7 @@ function openAllSummary(idx){
     totalIncentiveQ += incentiveQ;
     const mult = outletMultiplier(row.toko);
     const multBadge = mult !== 1 ? ` <span class="mult-badge">×${mult}</span>` : '';
-    rows += `
+    rowsHtml += `
       <tr>
         <td class="sm-cat">${cat.label}</td>
         <td class="sm-num">${fmt(target)}</td>
@@ -1446,22 +1465,61 @@ function openAllSummary(idx){
         <td class="sm-num">${QUARTER_INCENTIVE_SCHEME[cat.key] ? fmt(incentiveQ) + multBadge : '&mdash;'}</td>
       </tr>`;
   });
+  return { rowsHtml, totalIncentive, totalIncentiveQ };
+}
 
-  const body = `
+function allSummaryTableHtml(region, row){
+  const { rowsHtml, totalIncentive, totalIncentiveQ } = buildAllSummaryRows(region, row);
+  return `
     <table class="summary-table">
       <thead><tr>
         <th>Kategori</th><th>Target</th><th>Strata</th><th>Total</th><th>Kurang/Lebih</th><th>%</th><th>Insentif Bulanan</th>
         <th>Total Quarter</th><th>Strata Q</th><th>Insentif Quarter</th>
       </tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${rowsHtml}</tbody>
     </table>
     <div class="modal-grandtotal"><span>Total Insentif Bulanan</span><span>${fmtItemVal(totalIncentive)}</span></div>
     <div class="modal-grandtotal"><span>Total Insentif Quarter (${getActiveQuarter().label})</span><span>${fmtItemVal(totalIncentiveQ)}</span></div>
-    ${outletMultiplier(row.toko) !== 1 ? `<div class="modal-sub" style="margin-top:8px;">Toko ini punya pengali insentif khusus <b>×${outletMultiplier(row.toko)}</b> — sudah termasuk di semua angka insentif di atas.</div>` : ''}
-    ${renderBenchmarkSection('all', row.toko, row, region)}`;
+    ${outletMultiplier(row.toko) !== 1 ? `<div class="modal-sub" style="margin-top:8px;">Toko ini punya pengali insentif khusus <b>×${outletMultiplier(row.toko)}</b> — sudah termasuk di semua angka insentif di atas.</div>` : ''}`;
+}
+
+function openAllSummary(idx){
+  const region = currentRegion;
+  const row = getOutlets()[idx];
+
+  document.querySelector('.modal-box').classList.add('wide');
+  document.getElementById('modalTitle').textContent = row.toko;
+  document.getElementById('modalSub').textContent = (region==='makassar' ? 'Makassar' : 'Kendari') + ' · Ringkasan pencapaian semua kategori';
+
+  const body = allSummaryTableHtml(region, row) + renderBenchmarkSection('all', row.toko, row, region);
 
   document.getElementById('modalBody').innerHTML = body;
   openModalOverlay();
+}
+
+// Tab "RINGKASAN TOKO" — sama persis kayak modal ringkasan per-toko, tapi
+// SEMUA toko di-stack sekaligus di halaman, ga perlu klik satu-satu. Render ke
+// container terpisah (#altView) supaya nggak nimpa struktur thead/tbody/tfoot
+// tabel utama yang dipakai bareng sama tab kategori/Performance/SPG.
+function renderAllSummaryTable(skipSubtitle){
+  const region = currentRegion;
+  const outlets = getOutlets();
+  if(!skipSubtitle){
+    document.getElementById('subtitle').textContent =
+      (region==='makassar' ? 'Makassar' : 'Kendari') + ' · Ringkasan semua toko (semua kategori)';
+  }
+  document.getElementById('cards').innerHTML = '';
+
+  const altView = document.getElementById('altView');
+  altView.innerHTML = outlets.map(row => `
+    <div class="allsum-card">
+      <div class="allsum-head">
+        <h3>${row.toko}</h3>
+        ${outletMultiplier(row.toko) !== 1 ? `<span class="mult-badge">×${outletMultiplier(row.toko)}</span>` : ''}
+      </div>
+      <div class="table-scroll">${allSummaryTableHtml(region, row)}</div>
+    </div>
+  `).join('');
 }
 
 function openDetail(idx){
