@@ -134,6 +134,7 @@
   .allsum-card .table-scroll{background:transparent;box-shadow:none;border-radius:0;}
   table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px;}
   thead th{background:transparent;color:var(--sub);text-align:left;padding:14px 14px;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;border-bottom:1px solid var(--border);}
+  thead th.th-wrap{white-space:normal;max-width:120px;line-height:1.4;}
   tbody td{padding:11px 14px;border-top:1px solid var(--border-soft);}
   tbody tr{transition:background .3s var(--ease);}
   tbody tr:hover{background:rgba(75,61,246,.035);}
@@ -779,7 +780,8 @@ function renderOmzetPerKategoriTable(skipSubtitle){
 
   const cols = CATEGORIES; // termasuk 'all' di posisi pertama
   const thead = document.getElementById('thead');
-  thead.innerHTML = '<tr>' + ['#','Nama Toko'].concat(cols.map(c => c.label)).map(h=>`<th>${h}</th>`).join('') + '</tr>';
+  thead.innerHTML = '<tr>' + ['#','Nama Toko'].concat(cols.map(c => c.label))
+    .map(h => `<th class="${h.length > 15 ? 'th-wrap' : ''}">${h}</th>`).join('') + '</tr>';
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
