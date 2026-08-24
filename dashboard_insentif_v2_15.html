@@ -762,6 +762,54 @@ function renderPerformanceTable(skipSubtitle){
   `;
 }
 
+/* ============== TAB OMZET PER KATEGORI ==============
+   Kebalikan dari tab kategori biasa (yang perspektifnya "1 kategori, semua
+   toko") — tab ini perspektifnya "1 toko, semua kategori", nampilin actual
+   omzet (ch1+ch2, ikut "Lihat Bulan" kalau lagi browsing bulan lain) tiap
+   kategori dalam satu baris per toko, jadi gampang bandingin ALL/OIL/PORANG/
+   PLATINUM/MILK/SCHOOL/TEEN/NS POLOS/GRANOLA sekaligus. */
+function renderOmzetPerKategoriTable(skipSubtitle){
+  const region = currentRegion;
+  const outlets = getOutlets();
+
+  if(!skipSubtitle){
+    document.getElementById('subtitle').textContent =
+      (region==='makassar' ? 'Makassar' : 'Kendari') + ' · Omzet per Kategori (semua toko)';
+  }
+
+  const cols = CATEGORIES; // termasuk 'all' di posisi pertama
+  const thead = document.getElementById('thead');
+  thead.innerHTML = '<tr>' + ['#','Nama Toko'].concat(cols.map(c => c.label)).map(h=>`<th>${h}</th>`).join('') + '</tr>';
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const colTotals = cols.map(() => 0);
+
+  outlets.forEach((row, idx) => {
+    let cells = `<td>${idx+1}</td><td class="col-name">${row.toko}</td>`;
+    cols.forEach((cat, ci) => {
+      const ch = getRowChannels(region, row, cat.key);
+      const val = ch.ch1 + ch.ch2;
+      colTotals[ci] += val;
+      cells += `<td class="sm-num">${fmt(val)}</td>`;
+    });
+    const tr = document.createElement('tr');
+    tr.innerHTML = cells;
+    tbody.appendChild(tr);
+  });
+
+  const tfoot = document.getElementById('tfoot');
+  let footCells = `<td colspan="2" style="text-align:right">TOTAL</td>`;
+  colTotals.forEach(v => { footCells += `<td class="sm-num">${fmt(v)}</td>`; });
+  tfoot.innerHTML = '<tr>' + footCells + '</tr>';
+
+  const cards = document.getElementById('cards');
+  cards.innerHTML = `
+    <div class="card"><div class="card-inner"><div class="label">Jumlah Toko</div><div class="value">${outlets.length}</div></div></div>
+    <div class="card"><div class="card-inner"><div class="label">Total Omzet ALL</div><div class="value good">${fmt(colTotals[0])}</div></div></div>
+  `;
+}
+
 /* ============== TAB INSENTIF SPG ==============
    Insentif per orang (SPG), bukan per toko. Satu SPG bisa pegang maks 2 toko
    sekaligus, dengan proporsi "stay" (hari kerja dari total 6 hari/minggu):
@@ -1095,6 +1143,12 @@ function renderTabs(){
   allSumBtn.onclick = () => { currentCat = '__allsummary__'; renderTabs(); render(); };
   tabs.appendChild(allSumBtn);
 
+  const omzetBtn = document.createElement('button');
+  omzetBtn.textContent = '📦 OMZET PER KATEGORI';
+  omzetBtn.className = (currentCat === '__omzetcat__' ? 'active' : '') + ' tab-performance';
+  omzetBtn.onclick = () => { currentCat = '__omzetcat__'; renderTabs(); render(); };
+  tabs.appendChild(omzetBtn);
+
   const perfBtn = document.createElement('button');
   perfBtn.textContent = '📊 PERFORMANCE';
   perfBtn.className = (currentCat === '__performance__' ? 'active' : '') + ' tab-performance';
@@ -1286,6 +1340,7 @@ function render(skipSubtitle){
   }
   if(tableShell) tableShell.style.display = '';
   if(altView) altView.style.display = 'none';
+  if(currentCat === '__omzetcat__'){ if(viewMonthBar) viewMonthBar.style.display = ''; initViewMonthUI(); renderOmzetPerKategoriTable(skipSubtitle); return; }
   if(currentCat === '__performance__'){ if(viewMonthBar) viewMonthBar.style.display = 'none'; renderPerformanceTable(skipSubtitle); return; }
   if(currentCat === '__spg__'){ if(viewMonthBar) viewMonthBar.style.display = 'none'; renderSpgTable(skipSubtitle); return; }
   if(viewMonthBar) viewMonthBar.style.display = '';
