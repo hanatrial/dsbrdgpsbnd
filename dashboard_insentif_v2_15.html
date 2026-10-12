@@ -819,6 +819,67 @@ function renderOmzetPerKategoriTable(skipSubtitle){
   `;
 }
 
+/* ============== TAB ACHIEVEMENT ==============
+   Monitoring pencapaian: % capaian (actual / target) tiap kategori, satu baris
+   per toko. Warna: hijau >=100%, kuning 70-99%, merah <70%, strip (–) kalau
+   target belum diset. Ikut "Lihat Bulan". Baris TOTAL = capaian gabungan semua toko. */
+function achievementCell(actual, target){
+  if(!(target > 0)) return `<td class="sm-num" style="color:var(--sub)">–</td>`;
+  const pct = actual / target * 100;
+  const clr = pct >= 100 ? 'good' : pct >= 70 ? 'warn' : 'danger';
+  const w = Math.min(100, pct).toFixed(0);
+  return `<td class="sm-num" title="${fmt(actual)} / ${fmt(target)}">
+    <span style="display:inline-block;min-width:54px;padding:3px 8px;border-radius:999px;font-weight:700;background:var(--${clr}-bg);color:var(--${clr})">${pct.toFixed(1)}%</span>
+    <div style="height:3px;margin-top:4px;border-radius:2px;background:var(--${clr}-bg)"><div style="height:100%;width:${w}%;border-radius:2px;background:var(--${clr})"></div></div>
+  </td>`;
+}
+
+function renderAchievementTable(skipSubtitle){
+  const region = currentRegion;
+  const outlets = getOutlets();
+  if(!skipSubtitle){
+    document.getElementById('subtitle').textContent = REGION_LABEL[region] + ' · Achievement (% capaian vs target)';
+  }
+  const cols = CATEGORIES;
+  const thead = document.getElementById('thead');
+  thead.innerHTML = '<tr>' + ['#','Nama Toko'].concat(cols.map(c => c.label), ['Kategori Tercapai'])
+    .map(h => `<th class="${h.length > 15 ? 'th-wrap' : ''}">${h}</th>`).join('') + '</tr>';
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const sumAct = cols.map(() => 0), sumTgt = cols.map(() => 0);
+  let hitTotal = 0, tgtTotal = 0;
+
+  outlets.forEach((row, idx) => {
+    let cells = `<td>${idx+1}</td><td class="col-name">${row.toko}</td>`;
+    let hit = 0, withTarget = 0;
+    cols.forEach((cat, ci) => {
+      const ch = getRowChannels(region, row, cat.key);
+      const actual = ch.ch1 + ch.ch2;
+      const target = num((row[cat.key] || {}).target);
+      if(target > 0){ sumAct[ci] += actual; sumTgt[ci] += target; withTarget++; if(actual >= target) hit++; }
+      cells += achievementCell(actual, target);
+    });
+    hitTotal += hit; tgtTotal += withTarget;
+    cells += `<td class="sm-num"><b>${hit}</b> / ${withTarget}</td>`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = cells;
+    tbody.appendChild(tr);
+  });
+
+  const tfoot = document.getElementById('tfoot');
+  let footCells = `<td colspan="2" style="text-align:right">TOTAL</td>`;
+  cols.forEach((c, ci) => { footCells += achievementCell(sumAct[ci], sumTgt[ci]); });
+  footCells += `<td class="sm-num"><b>${hitTotal}</b> / ${tgtTotal}</td>`;
+  tfoot.innerHTML = '<tr>' + footCells + '</tr>';
+
+  const allPct = sumTgt[0] > 0 ? (sumAct[0] / sumTgt[0] * 100) : 0;
+  document.getElementById('cards').innerHTML = `
+    <div class="card"><div class="card-inner"><div class="label">Jumlah Toko</div><div class="value">${outlets.length}</div></div></div>
+    <div class="card"><div class="card-inner"><div class="label">Achievement ALL</div><div class="value ${allPct>=100?'good':''}">${allPct.toFixed(1)}%</div></div></div>
+    <div class="card"><div class="card-inner"><div class="label">Target Tercapai</div><div class="value">${hitTotal} / ${tgtTotal}</div></div></div>
+  `;
+}
 /* ============== TAB INSENTIF SPG ==============
    Insentif per orang (SPG), bukan per toko. Satu SPG bisa pegang maks 2 toko
    sekaligus, dengan proporsi "stay" (hari kerja dari total 6 hari/minggu):
@@ -1161,6 +1222,12 @@ function renderTabs(){
   omzetBtn.onclick = () => { currentCat = '__omzetcat__'; renderTabs(); render(); };
   tabs.appendChild(omzetBtn);
 
+  const achBtn = document.createElement('button');
+  achBtn.textContent = '🎯 ACHIEVEMENT';
+  achBtn.className = (currentCat === '__achievement__' ? 'active' : '') + ' tab-performance';
+  achBtn.onclick = () => { currentCat = '__achievement__'; renderTabs(); render(); };
+  tabs.appendChild(achBtn);
+
   const perfBtn = document.createElement('button');
   perfBtn.textContent = '📊 PERFORMANCE';
   perfBtn.className = (currentCat === '__performance__' ? 'active' : '') + ' tab-performance';
@@ -1353,6 +1420,7 @@ function render(skipSubtitle){
   if(tableShell) tableShell.style.display = '';
   if(altView) altView.style.display = 'none';
   if(currentCat === '__omzetcat__'){ if(viewMonthBar) viewMonthBar.style.display = ''; initViewMonthUI(); renderOmzetPerKategoriTable(skipSubtitle); return; }
+  if(currentCat === '__achievement__'){ if(viewMonthBar) viewMonthBar.style.display = ''; initViewMonthUI(); renderAchievementTable(skipSubtitle); return; }
   if(currentCat === '__performance__'){ if(viewMonthBar) viewMonthBar.style.display = 'none'; renderPerformanceTable(skipSubtitle); return; }
   if(currentCat === '__spg__'){ if(viewMonthBar) viewMonthBar.style.display = 'none'; renderSpgTable(skipSubtitle); return; }
   if(viewMonthBar) viewMonthBar.style.display = '';
