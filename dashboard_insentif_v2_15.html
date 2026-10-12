@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
@@ -265,6 +265,7 @@
     <div class="toggle">
       <button id="btn-makassar" class="active" onclick="switchRegion('makassar')">Makassar</button>
       <button id="btn-kendari" onclick="switchRegion('kendari')">Kendari</button>
+<button id="btn-palu" onclick="switchRegion('palu')">Palu</button>
     </div>
   </header>
 
@@ -324,8 +325,10 @@
    ========================================================= */
 const REGION_CHANNELS = {
   makassar: { ch1: 'BSP', ch2: 'BCP' },
-  kendari:  { ch1: 'MATAKAR', ch2: 'BCP' }
+  kendari:  { ch1: 'MATAKAR', ch2: 'BCP' },
+  palu:     { ch1: 'BSP', ch2: 'BCP' }
 };
+const REGION_LABEL = { makassar:'Makassar', kendari:'Kendari', palu:'Palu' };
 
 const CATEGORIES = [
   { key:'all',     label:'ALL',      target:'Target All' },
@@ -382,7 +385,7 @@ function calcIncentive(catKey, actual, scheme){
    ke TARGET (tier threshold) dan ke nilai insentif Rp-nya sekaligus, berlaku
    untuk skema Bulanan maupun Quarter. Disimpan di row.stayMult (default 1). */
 function findRowByToko(toko){
-  return (data.makassar||[]).find(r => r.toko === toko) || (data.kendari||[]).find(r => r.toko === toko);
+  return (data.makassar||[]).find(r => r.toko === toko) || (data.kendari||[]).find(r => r.toko === toko) || (data.palu||[]).find(r => r.toko === toko);
 }
 
 function outletMultiplier(toko){
@@ -472,7 +475,7 @@ function getActiveQuarter(){
   return QUARTER_PERIODS.find(q => q.months.includes(today)) || QUARTER_PERIODS[QUARTER_PERIODS.length-1];
 }
 
-let MONTHLY_DATA = { makassar:{}, kendari:{} };
+let MONTHLY_DATA = { makassar:{}, kendari:{}, palu:{} };
 let currentImportMonth = todayMonthKey();
 
 function getMonthlyActual(region, toko, monthKey, catKey){
@@ -587,7 +590,11 @@ function calcRowIncentiveQuarter(row, catKey, region){
 
 function ensureAllCategories(){
   const catKeys = CATEGORIES.map(c => c.key);
-  ['makassar','kendari'].forEach(region => {
+  (data.palu||[]).forEach(r => { if(['BNS','BUMI NYIUR SWALAYAN'].includes(r.toko)) r.toko='BUMI NYIUR SWALAYAN/JL S PARMAN NO'; else if(['GRAND HERO','GRAND HERO KOTA PALU'].includes(r.toko)) r.toko='GRAND HERO/JL BASUKI RAHMAT NO.'; });
+  if(!data.palu || !data.palu.length) data.palu = JSON.parse(JSON.stringify(SEED_DATA.palu || []));
+  if(!MONTHLY_DATA.palu) MONTHLY_DATA.palu = {};
+  if(!DETAIL_DATA.palu) DETAIL_DATA.palu = {};
+  ['makassar','kendari','palu'].forEach(region => {
     (data[region] || []).forEach(row => {
       catKeys.forEach(k => {
         if(!row[k]) row[k] = { target:0, targetQ:0, ch1:0, ch2:0 };
@@ -705,7 +712,7 @@ function renderPerformanceTable(skipSubtitle){
 
   if(!skipSubtitle){
     document.getElementById('subtitle').textContent =
-      (region==='makassar' ? 'Makassar' : 'Kendari') + ' · Performance (semua kategori)';
+      REGION_LABEL[region] + ' · Performance (semua kategori)';
   }
 
   const thead = document.getElementById('thead');
@@ -775,7 +782,7 @@ function renderOmzetPerKategoriTable(skipSubtitle){
 
   if(!skipSubtitle){
     document.getElementById('subtitle').textContent =
-      (region==='makassar' ? 'Makassar' : 'Kendari') + ' · Omzet per Kategori (semua toko)';
+      REGION_LABEL[region] + ' · Omzet per Kategori (semua toko)';
   }
 
   const cols = CATEGORIES; // termasuk 'all' di posisi pertama
@@ -830,7 +837,8 @@ function defaultSpgData(){
     makassar: ['Rhiby Aliyah Pratiwi','Resky Audina','Lilis Suriani','Muliani','Salsa Syabilla Zahra','Yuninda Natasya Amey','Amel','Nadia','Kamalia','A. Etriani','Ike Putri Magfirah']
       .map(name => ({ name, s1:'', h1:SPG_TOTAL_DAYS, s2:'', h2:0 })),
     kendari: ['Andi Sriwahyuni','Yuliana','Nur Alvina Azizah Buburanda','Nabila Febriani']
-      .map(name => ({ name, s1:'', h1:SPG_TOTAL_DAYS, s2:'', h2:0 }))
+      .map(name => ({ name, s1:'', h1:SPG_TOTAL_DAYS, s2:'', h2:0 })),
+    palu: []
   };
 }
 
@@ -846,6 +854,7 @@ function loadSpgData(){
     delete SPG_DATA.bsp; delete SPG_DATA.matakar;
     if(!SPG_DATA.makassar) SPG_DATA.makassar = [];
     if(!SPG_DATA.kendari) SPG_DATA.kendari = [];
+    if(!SPG_DATA.palu) SPG_DATA.palu = [];
   }catch(e){
     console.error(e);
     SPG_DATA = defaultSpgData();
@@ -895,7 +904,7 @@ function calcSpgIncentive(spg, outlets, region, catKey, quarter){
 function renderSpgTable(skipSubtitle){
   if(!SPG_DATA) loadSpgData();
   const region = currentRegion;
-  const regionLabel = region === 'makassar' ? 'Makassar' : 'Kendari';
+  const regionLabel = REGION_LABEL[region];
   if(!skipSubtitle) document.getElementById('subtitle').textContent = 'Insentif SPG · ' + regionLabel;
 
   const catCols = CATEGORIES.filter(c => c.key !== 'all');
@@ -971,9 +980,9 @@ function renderSpgTable(skipSubtitle){
 }
 
 /* ============== DATA AWAL (dari file insetif.xlsx yang diupload) ============== */
-let DETAIL_DATA = {"makassar": {"SATU SAMA KARLINK": {"teen": {"ch1": {"HILO TEEN RTD COFFEE TIRAMISU 200ML 24'S": 167616.0}, "ch2": {}}}}, "kendari": {}};
+let DETAIL_DATA = {"makassar": {"SATU SAMA KARLINK": {"teen": {"ch1": {"HILO TEEN RTD COFFEE TIRAMISU 200ML 24'S": 167616.0}, "ch2": {}}}}, "kendari": {}, "palu": {}};
 
-const SEED_DATA = {"makassar": [{"toko": "CV. TOP MODE PERINTIS", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 6000000, "ch1": 0, "ch2": 0}, "school": {"target": 10000000, "ch1": 0, "ch2": 0}, "teen": {"target": 10000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 5200000, "ch1": 0, "ch2": 0}}, {"toko": "DIAMOND / PT. KAGE DWIJAYA", "all": {"target": 107000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 50000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 3000000, "ch1": 0, "ch2": 0}}, {"toko": "EKTONG.UD", "all": {"target": 77000000, "ch1": 0, "ch2": 0}, "oil": {"target": 6000000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 4100000, "ch1": 0, "ch2": 0}}, {"toko": "HENGKY TRANKU  MM", "all": {"target": 135000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 25000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 10000000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 8600000, "ch1": 0, "ch2": 0}}, {"toko": "SATU SAMA JAYA ABADI HERTASNING  PT", "all": {"target": 175000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 25000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 10000000, "ch1": 0, "ch2": 0}, "school": {"target": 30000000, "ch1": 0, "ch2": 0}, "teen": {"target": 30000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 16400000, "ch1": 0, "ch2": 0}}, {"toko": "SATU SAMA JAYA ABADI PERINTIS  PT", "all": {"target": 175000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 25000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 10000000, "ch1": 0, "ch2": 0}, "school": {"target": 30000000, "ch1": 0, "ch2": 0}, "teen": {"target": 30000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 14900000, "ch1": 0, "ch2": 0}}, {"toko": "SATU SAMA JAYA ABADI PT", "all": {"target": 350000000, "ch1": 0, "ch2": 0}, "oil": {"target": 34000000, "ch1": 0, "ch2": 0}, "porang": {"target": 50000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 30000000, "ch1": 0, "ch2": 0}, "milk": {"target": 20000000, "ch1": 0, "ch2": 0}, "school": {"target": 40000000, "ch1": 0, "ch2": 0}, "teen": {"target": 40000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 18000000, "ch1": 0, "ch2": 0}}, {"toko": "GRAND TOSERBA", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 6000000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0, "ch2": 0}, "school": {"target": 5000000, "ch1": 0, "ch2": 0}, "teen": {"target": 10000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 12400000, "ch1": 0, "ch2": 0}}, {"toko": "GELAEL INDOTIM  PT", "all": {"target": 100000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 50000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 10000000, "ch1": 0, "ch2": 0}, "school": {"target": 15000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "SATU SAMA KARLINK", "all": {"target": 50000000, "ch1": 1785576.0, "ch2": 0}, "oil": {"target": 6000000, "ch1": 0.0, "ch2": 0}, "porang": {"target": 4000000, "ch1": 0.0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0.0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0.0, "ch2": 0}, "school": {"target": 10000000, "ch1": 0.0, "ch2": 0}, "teen": {"target": 0, "ch1": 167616.0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0.0, "ch2": 0}}, {"toko": "GRAND TOSERBA HERTASNING", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 6000000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0, "ch2": 0}, "school": {"target": 10000000, "ch1": 0, "ch2": 0}, "teen": {"target": 10000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 5000000, "ch1": 0, "ch2": 0}}], "kendari": [{"toko": "Marina Swalayan ( CV. Marina Sukses Abadi  )", "all": {"target": 38000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 4000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 10000000, "ch1": 0, "ch2": 0}, "milk": {"target": 6000000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 1000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "PT. MATAHARI PUTRA PRIMA TBK. ( The Park Kendari )", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 20000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 10000000, "ch1": 0, "ch2": 0}, "milk": {"target": 6000000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 10000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "Tk. Sanya ( Tn.Jonny Mulyanto )", "all": {"target": 61000000, "ch1": 0, "ch2": 0}, "oil": {"target": 12500000, "ch1": 0, "ch2": 0}, "porang": {"target": 4000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 10000000, "ch1": 0, "ch2": 0}, "milk": {"target": 6000000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 4100000, "ch1": 0, "ch2": 0}}, {"toko": "PT. Top Mandiri Perkasa", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 4000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "Tk. Damai ( CV. SUMBER BERKAT ABADI )", "all": {"target": 30000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "Tk. Damai 2 ( CV.SUMBER BERKAT ABADI )", "all": {"target": 30000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "Alaska", "all": {"target": 40000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 0, "ch1": 0, "ch2": 0}, "platinum": {"target": 0, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}]}
+const SEED_DATA = {"palu": [{"toko": "BUMI NYIUR SWALAYAN/JL S PARMAN NO", "all": {"target": 0, "ch1": 0, "ch2": 0}, "oil": {"target": 0, "ch1": 0, "ch2": 0}, "porang": {"target": 0, "ch1": 0, "ch2": 0}, "platinum": {"target": 0, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "GRAND HERO/JL BASUKI RAHMAT NO.", "all": {"target": 0, "ch1": 0, "ch2": 0}, "oil": {"target": 0, "ch1": 0, "ch2": 0}, "porang": {"target": 0, "ch1": 0, "ch2": 0}, "platinum": {"target": 0, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}], "makassar": [{"toko": "CV. TOP MODE PERINTIS", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 6000000, "ch1": 0, "ch2": 0}, "school": {"target": 10000000, "ch1": 0, "ch2": 0}, "teen": {"target": 10000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 5200000, "ch1": 0, "ch2": 0}}, {"toko": "DIAMOND / PT. KAGE DWIJAYA", "all": {"target": 107000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 50000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 3000000, "ch1": 0, "ch2": 0}}, {"toko": "EKTONG.UD", "all": {"target": 77000000, "ch1": 0, "ch2": 0}, "oil": {"target": 6000000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 4100000, "ch1": 0, "ch2": 0}}, {"toko": "HENGKY TRANKU  MM", "all": {"target": 135000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 25000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 10000000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 8600000, "ch1": 0, "ch2": 0}}, {"toko": "SATU SAMA JAYA ABADI HERTASNING  PT", "all": {"target": 175000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 25000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 10000000, "ch1": 0, "ch2": 0}, "school": {"target": 30000000, "ch1": 0, "ch2": 0}, "teen": {"target": 30000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 16400000, "ch1": 0, "ch2": 0}}, {"toko": "SATU SAMA JAYA ABADI PERINTIS  PT", "all": {"target": 175000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 25000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 10000000, "ch1": 0, "ch2": 0}, "school": {"target": 30000000, "ch1": 0, "ch2": 0}, "teen": {"target": 30000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 14900000, "ch1": 0, "ch2": 0}}, {"toko": "SATU SAMA JAYA ABADI PT", "all": {"target": 350000000, "ch1": 0, "ch2": 0}, "oil": {"target": 34000000, "ch1": 0, "ch2": 0}, "porang": {"target": 50000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 30000000, "ch1": 0, "ch2": 0}, "milk": {"target": 20000000, "ch1": 0, "ch2": 0}, "school": {"target": 40000000, "ch1": 0, "ch2": 0}, "teen": {"target": 40000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 18000000, "ch1": 0, "ch2": 0}}, {"toko": "GRAND TOSERBA", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 6000000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0, "ch2": 0}, "school": {"target": 5000000, "ch1": 0, "ch2": 0}, "teen": {"target": 10000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 12400000, "ch1": 0, "ch2": 0}}, {"toko": "GELAEL INDOTIM  PT", "all": {"target": 100000000, "ch1": 0, "ch2": 0}, "oil": {"target": 17000000, "ch1": 0, "ch2": 0}, "porang": {"target": 50000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 15000000, "ch1": 0, "ch2": 0}, "milk": {"target": 10000000, "ch1": 0, "ch2": 0}, "school": {"target": 15000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "SATU SAMA KARLINK", "all": {"target": 50000000, "ch1": 1785576.0, "ch2": 0}, "oil": {"target": 6000000, "ch1": 0.0, "ch2": 0}, "porang": {"target": 4000000, "ch1": 0.0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0.0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0.0, "ch2": 0}, "school": {"target": 10000000, "ch1": 0.0, "ch2": 0}, "teen": {"target": 0, "ch1": 167616.0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0.0, "ch2": 0}}, {"toko": "GRAND TOSERBA HERTASNING", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 6000000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 2500000, "ch1": 0, "ch2": 0}, "school": {"target": 10000000, "ch1": 0, "ch2": 0}, "teen": {"target": 10000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 5000000, "ch1": 0, "ch2": 0}}], "kendari": [{"toko": "Marina Swalayan ( CV. Marina Sukses Abadi  )", "all": {"target": 38000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 4000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 10000000, "ch1": 0, "ch2": 0}, "milk": {"target": 6000000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 1000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "PT. MATAHARI PUTRA PRIMA TBK. ( The Park Kendari )", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 20000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 10000000, "ch1": 0, "ch2": 0}, "milk": {"target": 6000000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 10000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "Tk. Sanya ( Tn.Jonny Mulyanto )", "all": {"target": 61000000, "ch1": 0, "ch2": 0}, "oil": {"target": 12500000, "ch1": 0, "ch2": 0}, "porang": {"target": 4000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 10000000, "ch1": 0, "ch2": 0}, "milk": {"target": 6000000, "ch1": 0, "ch2": 0}, "school": {"target": 20000000, "ch1": 0, "ch2": 0}, "teen": {"target": 20000000, "ch1": 0, "ch2": 0}, "nspolos": {"target": 4100000, "ch1": 0, "ch2": 0}}, {"toko": "PT. Top Mandiri Perkasa", "all": {"target": 50000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 4000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "Tk. Damai ( CV. SUMBER BERKAT ABADI )", "all": {"target": 30000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "Tk. Damai 2 ( CV.SUMBER BERKAT ABADI )", "all": {"target": 30000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 2000000, "ch1": 0, "ch2": 0}, "platinum": {"target": 5000000, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}, {"toko": "Alaska", "all": {"target": 40000000, "ch1": 0, "ch2": 0}, "oil": {"target": 7500000, "ch1": 0, "ch2": 0}, "porang": {"target": 0, "ch1": 0, "ch2": 0}, "platinum": {"target": 0, "ch1": 0, "ch2": 0}, "milk": {"target": 0, "ch1": 0, "ch2": 0}, "school": {"target": 0, "ch1": 0, "ch2": 0}, "teen": {"target": 0, "ch1": 0, "ch2": 0}, "nspolos": {"target": 0, "ch1": 0, "ch2": 0}}]}
 ;
 
 let currentRegion = 'makassar';
@@ -1052,7 +1061,7 @@ const NSPOLOS_TARGET_PATCH = {
 function applyNsPolosTargetPatch(){
   try{
     if(localStorage.getItem('insentif_nspolos_target_patch_v1')) return;
-    ['makassar','kendari'].forEach(region => {
+    ['makassar','kendari','palu'].forEach(region => {
       (data[region] || []).forEach(row => {
         if(NSPOLOS_TARGET_PATCH[row.toko] !== undefined){
           row.nspolos.target = NSPOLOS_TARGET_PATCH[row.toko];
@@ -1124,6 +1133,7 @@ function switchRegion(region){
   currentRegion = region;
   document.getElementById('btn-makassar').classList.toggle('active', region==='makassar');
   document.getElementById('btn-kendari').classList.toggle('active', region==='kendari');
+  document.getElementById('btn-palu').classList.toggle('active', region==='palu');
   renderTabs();
   render();
 }
@@ -1179,7 +1189,7 @@ function pctBadgeClass(pct){
   return 'bad';
 }
 
-function getOutlets(){ return data[currentRegion]; }
+function getOutlets(){ return data[currentRegion] || []; }
 function getCatConf(){ return CATEGORIES.find(c => c.key === currentCat); }
 
 function startEditTarget(idx){
@@ -1356,7 +1366,7 @@ function render(skipSubtitle){
 
   if(!skipSubtitle){
     document.getElementById('subtitle').textContent =
-      (region==='makassar' ? 'Makassar' : 'Kendari') + ' · ' +
+      REGION_LABEL[region] + ' · ' +
       cat.label;
   }
 
@@ -1546,7 +1556,7 @@ function openAllSummary(idx){
 
   document.querySelector('.modal-box').classList.add('wide');
   document.getElementById('modalTitle').textContent = row.toko;
-  document.getElementById('modalSub').textContent = (region==='makassar' ? 'Makassar' : 'Kendari') + ' · Ringkasan pencapaian semua kategori';
+  document.getElementById('modalSub').textContent = REGION_LABEL[region] + ' · Ringkasan pencapaian semua kategori';
 
   const body = allSummaryTableHtml(region, row) + renderBenchmarkSection('all', row.toko, row, region);
 
@@ -1563,7 +1573,7 @@ function renderAllSummaryTable(skipSubtitle){
   const outlets = getOutlets();
   if(!skipSubtitle){
     document.getElementById('subtitle').textContent =
-      (region==='makassar' ? 'Makassar' : 'Kendari') + ' · Ringkasan semua toko (semua kategori)';
+      REGION_LABEL[region] + ' · Ringkasan semua toko (semua kategori)';
   }
   document.getElementById('cards').innerHTML = '';
 
@@ -1590,7 +1600,7 @@ function openDetail(idx){
 
   document.querySelector('.modal-box').classList.remove('wide');
   document.getElementById('modalTitle').textContent = row.toko;
-  document.getElementById('modalSub').textContent = (region==='makassar' ? 'Makassar' : 'Kendari') + ' · ' + cat.label + ' · rincian item & omzet per distributor';
+  document.getElementById('modalSub').textContent = REGION_LABEL[region] + ' · ' + cat.label + ' · rincian item & omzet per distributor';
 
   const target = num(row[cat.key].target);
   const grand = Object.values(detailCat.ch1||{}).reduce((a,b)=>a+b,0) + Object.values(detailCat.ch2||{}).reduce((a,b)=>a+b,0);
@@ -1639,12 +1649,12 @@ let currentImportSource = 'bsp';
 
 function resetChannelsToZero(){
   const cats = ['all','oil','porang','platinum','milk','school','teen','nspolos','granola'];
-  ['makassar','kendari'].forEach(region => {
-    data[region].forEach(row => {
+  ['makassar','kendari','palu'].forEach(region => {
+    (data[region]||[]).forEach(row => {
       cats.forEach(cat => { row[cat].ch1 = 0; row[cat].ch2 = 0; });
     });
   });
-  DETAIL_DATA = { makassar: {}, kendari: {} };
+  DETAIL_DATA = { makassar: {}, kendari: {}, palu: {} };
   persist();
   render();
   const status = document.getElementById('importStatus');
@@ -1681,7 +1691,7 @@ function switchImportSource(src){
   });
   const hint = {
     bsp: 'BSP → otomatis masuk ke Makassar (Netto per toko per item).',
-    bcp: 'BCP → otomatis diproses untuk Makassar & Kendari sekaligus dari satu file (DPP, ALL & NS Polos).',
+    bcp: 'BCP → otomatis diproses untuk Makassar, Kendari & Palu sekaligus dari satu file (DPP, ALL & NS Polos).',
     matakar: 'MATAKAR → otomatis masuk ke Kendari (NET_SALES_MINUS_PPN).'
   };
   document.getElementById('importStatus').textContent = hint[src];
@@ -1715,6 +1725,11 @@ const BCP_ALIAS_MAP = {
     "Marina Swalayan ( CV. Marina Sukses Abadi  )": "MARINA SWALAYAN",
     "PT. Top Mandiri Perkasa": "TOP SWALAYAN /KOTA KOLAKA"
     // The Park Kendari: dikonfirmasi tidak ada di data BCP
+  },
+  palu: {
+    // nilai bisa string atau array nama Perusahaan di file BCP (cabang PALUHAI)
+    "BUMI NYIUR SWALAYAN/JL S PARMAN NO": ["BUMI NYIUR SWALAYAN/JL S PARMAN NO", "BUMI NYIUR SWALAYAN GIP"],
+    "GRAND HERO/JL BASUKI RAHMAT NO.": "GRAND HERO/JL BASUKI RAHMAT NO."
   }
 };
 
@@ -1744,7 +1759,7 @@ function findOutletByAliasOrFuzzy(perusahaanName, region){
   const aliasMap = BCP_ALIAS_MAP[region] || {};
   // cek alias yang sudah dikonfirmasi dulu (exact match ke nama alias)
   for(const [toko, aliasName] of Object.entries(aliasMap)){
-    if(normName(aliasName) === norm){
+    if([].concat(aliasName).some(a => normName(a) === norm)){
       const outlet = (data[region] || []).find(r => r.toko === toko);
       if(outlet) return outlet;
     }
@@ -2045,15 +2060,16 @@ function importBCP(rows, wb){
   const { headerRow, idx: idxMap } = loc;
   const idxCabang = idxMap.cabang, idxPerusahaan = idxMap.perusahaan, idxMerek = idxMap.merek,
         idxGroup1 = idxMap.group1, idxNama = idxMap.nama, idxDPP = idxMap.dpp;
-  const branchMap = { makassar: 'MAKASSAR OMEGA', kendari: 'KENDARI' };
-  const sumsByRegion = { makassar: {}, kendari: {} };
-  const detailsByRegion = { makassar: {}, kendari: {} };
+  const branchMap = { makassar: 'MAKASSAR OMEGA', kendari: 'KENDARI', palu: 'PALUHAI' };
+  const sumsByRegion = { makassar: {}, kendari: {}, palu: {} };
+  const detailsByRegion = { makassar: {}, kendari: {}, palu: {} };
   for(let r=headerRow+1; r<rows.length; r++){
     const row = rows[r];
     const cabang = normName(row[idxCabang]);
     let region = null;
     if(cabang === normName(branchMap.makassar)) region = 'makassar';
     else if(cabang === normName(branchMap.kendari)) region = 'kendari';
+    else if(cabang === normName(branchMap.palu)) region = 'palu';
     if(!region) continue;
     const perusahaan = row[idxPerusahaan];
     if(!perusahaan) continue;
@@ -2073,14 +2089,15 @@ function importBCP(rows, wb){
   }
   applyImportedSums(sumsByRegion.makassar, 'ch2', ['all','nspolos'], 'makassar', currentImportMonth);
   applyImportedSums(sumsByRegion.kendari, 'ch2', ['all','nspolos'], 'kendari', currentImportMonth);
-  ['makassar','kendari'].forEach(region => {
+  applyImportedSums(sumsByRegion.palu, 'ch2', ['all','nspolos'], 'palu', currentImportMonth);
+  ['makassar','kendari','palu'].forEach(region => {
     Object.entries(detailsByRegion[region]).forEach(([toko, items]) => {
       setDetailChannel(region, toko, 'nspolos', 'ch2', items);
     });
   });
-  const nMks = Object.keys(sumsByRegion.makassar).length, nKdi = Object.keys(sumsByRegion.kendari).length;
+  const nMks = Object.keys(sumsByRegion.makassar).length, nKdi = Object.keys(sumsByRegion.kendari).length, nPalu = Object.keys(sumsByRegion.palu).length;
   const fallbackNoteBcp = usedPivotFallback ? ' (dibaca dari pivot cache)' : '';
-  status.textContent = `BCP (${monthLabel(currentImportMonth)})${fallbackNoteBcp}: Makassar ${nMks} toko, Kendari ${nKdi} toko cocok & diperbarui (ALL & NS Polos).`;
+  status.textContent = `BCP (${monthLabel(currentImportMonth)})${fallbackNoteBcp}: Makassar ${nMks} toko, Kendari ${nKdi} toko, Palu ${nPalu} toko cocok & diperbarui (ALL & NS Polos).`;
   status.className = 'import-status ok';
 }
 
@@ -2220,6 +2237,8 @@ function applyRemoteState(remote){
   if(remote.detailData) DETAIL_DATA = remote.detailData;
   if(remote.monthlyData) MONTHLY_DATA = remote.monthlyData;
   if(remote.spgData) SPG_DATA = remote.spgData;
+  if(SPG_DATA && !SPG_DATA.palu) SPG_DATA.palu = [];
+  ensureAllCategories(); // Firestore lama belum punya region Palu
   try{
     localStorage.setItem('insentif_mpo_data_v15', JSON.stringify(data));
     localStorage.setItem('insentif_mpo_detail_v15', JSON.stringify(DETAIL_DATA));
