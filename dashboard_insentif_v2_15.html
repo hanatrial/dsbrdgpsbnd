@@ -326,7 +326,7 @@
 const REGION_CHANNELS = {
   makassar: { ch1: 'BSP', ch2: 'BCP' },
   kendari:  { ch1: 'MATAKAR', ch2: 'BCP' },
-  palu:     { ch1: 'BSP', ch2: 'BCP' }
+  palu:     { ch1: 'BCP', ch2: 'BCP' } // Palu cuma punya sumber BCP -> semua disimpan di ch1, kolom ch2 disembunyikan
 };
 const REGION_LABEL = { makassar:'Makassar', kendari:'Kendari', palu:'Palu' };
 
@@ -1395,7 +1395,8 @@ function strataCellHtml(idx, catKey, currentVal, actual, scheme, handler, toko){
    Kategori lain (Oil, Porang, Platinum, Milk, School, Teen, Granola) actual-nya
    cuma dari BSP/MATAKAR — jadi kolom BCP disembunyikan supaya tidak nampilin
    kolom yang memang selalu kosong buat kategori-kategori itu. */
-function categoryHasBcp(catKey){
+function categoryHasBcp(catKey, region){
+  if((region || currentRegion) === 'palu') return false; // Palu: satu kolom BCP saja (ch1)
   return catKey === 'all' || catKey === 'nspolos';
 }
 
@@ -1430,7 +1431,7 @@ function render(skipSubtitle){
   const cat = getCatConf();
   const outlets = getOutlets();
   const ch = REGION_CHANNELS[region];
-  const showBcp = categoryHasBcp(cat.key);
+  const showBcp = categoryHasBcp(cat.key, region);
   const showQuarter = categoryHasQuarter(cat.key);
 
   if(!skipSubtitle){
@@ -1688,7 +1689,7 @@ function openDetail(idx){
       </table>
     </div>`;
   body += renderChannelSection(ch.ch1, detailCat.ch1);
-  if(categoryHasBcp(cat.key)) body += renderChannelSection(ch.ch2, detailCat.ch2);
+  if(categoryHasBcp(cat.key, region)) body += renderChannelSection(ch.ch2, detailCat.ch2);
   body += `<div class="modal-grandtotal"><span>Total ${cat.label}</span><span>${fmtItemVal(grand)}</span></div>`;
   body += renderBenchmarkSection(cat.key, row.toko, row, region);
 
@@ -1883,6 +1884,26 @@ const CAT_CLASSIFIERS = {
   granola: isGranolaItem
 };
 
+// Pengelompokan item (KodeBarang -> kategori) untuk Palu, sesuai daftar Group dari user.
+// Palu cuma punya sumber BCP, jadi semua kategori dihitung dari BCP (DPP) lewat peta ini;
+// kode yang tidak ada di peta dicoba lewat CAT_CLASSIFIERS (berdasarkan nama barang).
+const PALU_ITEM_GROUP = {
+  '17/010200501A':'school','17/010200507X':'school','17/010200801A':'school','17/010200810Z':'teen',
+  '17/010200811A':'teen','17/010200840D':'school','17/010200841E':'school','17/010201401B':'school',
+  '17/010201403D':'platinum','17/010201403H':'platinum','17/010201404A':'school','17/010201404B':'school',
+  '17/010201404C':'school','17/010201404D':'teen','17/010201405A':'teen','17/010201405B':'teen',
+  '17/010201405C':'teen','17/010201405J':'school','17/010201405K':'school','17/010201407A':'school',
+  '17/010201407B':'school','17/010201407C':'school','17/010201438J':'school','17/010202801C':'school',
+  '17/010202801D':'school','17/010202801E':'teen','17/010202801H':'school','17/010202802A':'school',
+  '17/010202802B':'teen','17/010202802C':'teen','17/010202807B':'school','17/010202807C':'school',
+  '17/010202817H':'platinum','17/010204401A':'school','17/010204401B':'school','17/010204501A':'school',
+  '17/010209601A':'teen','17/010210301A':'school','17/010210332V':'school','17/010210501A':'school',
+  '17/010211126P':'platinum','17/010213801A':'granola','17/0204132001A':'porang','17/020413225D':'porang',
+  '17/020413226E':'porang','17/030402801D':'milk','17/030402801E':'milk','17/030413217G':'porang',
+  '17/060403901A':'oil','17/060403901B':'oil','17/060408301A':'oil','17/060408301B':'oil',
+  '17/060408301C':'oil','17/1102061001A':'platinum'
+};
+const PALU_CATS = ['all','oil','porang','platinum','milk','school','teen','nspolos','granola'];
 function findHeaderIndex(headerRow, candidates){
   const norm = headerRow.map(h => normName(h));
   for(const cand of candidates){
@@ -2128,10 +2149,13 @@ function importBCP(rows, wb){
     return;
   }
   const { headerRow, idx: idxMap } = loc;
+  const idxKode = findHeaderIndex(rows[headerRow] || [], ['KodeBarang']);
+  const paluDetails = {};
   const idxCabang = idxMap.cabang, idxPerusahaan = idxMap.perusahaan, idxMerek = idxMap.merek,
         idxGroup1 = idxMap.group1, idxNama = idxMap.nama, idxDPP = idxMap.dpp;
   const branchMap = { makassar: 'MAKASSAR OMEGA', kendari: 'KENDARI', palu: 'PALUHAI' };
   const sumsByRegion = { makassar: {}, kendari: {}, palu: {} };
+  const paluZero = () => Object.fromEntries(PALU_CATS.map(c => [c, 0]));
   const detailsByRegion = { makassar: {}, kendari: {}, palu: {} };
   for(let r=headerRow+1; r<rows.length; r++){
     const row = rows[r];
@@ -2148,8 +2172,19 @@ function importBCP(rows, wb){
     const dpp = parseFloat(row[idxDPP])||0;
     const merek = row[idxMerek], group1 = U(row[idxGroup1]), nama = row[idxNama];
     const sums = sumsByRegion[region];
-    sums[match.toko] = sums[match.toko] || {all:0, nspolos:0};
+    sums[match.toko] = sums[match.toko] || (region === 'palu' ? paluZero() : {all:0, nspolos:0});
     sums[match.toko].all += dpp;
+    if(region === 'palu'){
+      const kode = idxKode >= 0 ? String(row[idxKode]||'').trim().toUpperCase() : '';
+      let pcat = PALU_ITEM_GROUP[kode];
+      if(!pcat){ for(const k of ['oil','porang','platinum','milk','school','teen','granola']){ if(CAT_CLASSIFIERS[k](nama)){ pcat = k; break; } } }
+      if(pcat){
+        sums[match.toko][pcat] += dpp;
+        const pd = (paluDetails[match.toko] = paluDetails[match.toko] || {});
+        pd[pcat] = pd[pcat] || {};
+        pd[pcat][nama] = (pd[pcat][nama] || 0) + dpp;
+      }
+    }
     if(merek==='NUTRISARI' && (group1==='TRADITIONAL' || U(nama).includes('PLS'))){
       sums[match.toko].nspolos += dpp;
       const det = detailsByRegion[region];
@@ -2159,15 +2194,22 @@ function importBCP(rows, wb){
   }
   applyImportedSums(sumsByRegion.makassar, 'ch2', ['all','nspolos'], 'makassar', currentImportMonth);
   applyImportedSums(sumsByRegion.kendari, 'ch2', ['all','nspolos'], 'kendari', currentImportMonth);
-  applyImportedSums(sumsByRegion.palu, 'ch2', ['all','nspolos'], 'palu', currentImportMonth);
-  ['makassar','kendari','palu'].forEach(region => {
+  // Palu: semua kategori dari BCP, disimpan di ch1 (ch2 dikosongkan supaya tidak dobel)
+  const paluZeros = Object.fromEntries(Object.keys(sumsByRegion.palu).map(k => [k, paluZero()]));
+  applyImportedSums(paluZeros, 'ch2', PALU_CATS, 'palu', currentImportMonth);
+  applyImportedSums(sumsByRegion.palu, 'ch1', PALU_CATS, 'palu', currentImportMonth);
+  ['makassar','kendari'].forEach(region => {
     Object.entries(detailsByRegion[region]).forEach(([toko, items]) => {
       setDetailChannel(region, toko, 'nspolos', 'ch2', items);
     });
   });
+  Object.entries(paluDetails).forEach(([toko, cats]) => {
+    Object.entries(cats).forEach(([cat, items]) => setDetailChannel('palu', toko, cat, 'ch1', items));
+  });
+  Object.entries(detailsByRegion.palu).forEach(([toko, items]) => setDetailChannel('palu', toko, 'nspolos', 'ch1', items));
   const nMks = Object.keys(sumsByRegion.makassar).length, nKdi = Object.keys(sumsByRegion.kendari).length, nPalu = Object.keys(sumsByRegion.palu).length;
   const fallbackNoteBcp = usedPivotFallback ? ' (dibaca dari pivot cache)' : '';
-  status.textContent = `BCP (${monthLabel(currentImportMonth)})${fallbackNoteBcp}: Makassar ${nMks} toko, Kendari ${nKdi} toko, Palu ${nPalu} toko cocok & diperbarui (ALL & NS Polos).`;
+  status.textContent = `BCP (${monthLabel(currentImportMonth)})${fallbackNoteBcp}: Makassar ${nMks} toko, Kendari ${nKdi} toko, Palu ${nPalu} toko cocok & diperbarui (ALL & NS Polos; Palu: semua kategori).`;
   status.className = 'import-status ok';
 }
 
