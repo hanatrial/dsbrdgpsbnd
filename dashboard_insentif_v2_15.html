@@ -285,8 +285,8 @@
       <button id="src-bsp" class="active" onclick="switchImportSource('bsp')">BSP</button>
       <button id="src-bcp" onclick="switchImportSource('bcp')">BCP</button>
       <button id="src-matakar" onclick="switchImportSource('matakar')">MATAKAR</button>
-      <button id="src-luwukgt" onclick="switchImportSource('luwukgt')">LUWUK GT</button>
-      <button id="src-luwukmt" onclick="switchImportSource('luwukmt')">LUWUK MT</button>
+      <button id="src-luwukgt" onclick="switchImportSource('luwukgt')">LUWUK TBP</button>
+      <button id="src-luwukmt" onclick="switchImportSource('luwukmt')">LUWUK ASB</button>
     </div>
     <select id="importMonth" class="month-select" onchange="switchImportMonth(this.value)" title="Data hasil import akan dicatat untuk bulan ini"></select>
     <input type="file" id="importFile" accept=".xlsx,.xls,.xlsb,.csv" onchange="handleImportFile(event)">
@@ -330,7 +330,7 @@ const REGION_CHANNELS = {
   makassar: { ch1: 'BSP', ch2: 'BCP' },
   kendari:  { ch1: 'MATAKAR', ch2: 'BCP' },
   palu:     { ch1: 'BCP', ch2: 'BCP' },
-  luwuk:    { ch1: 'GT', ch2: 'MT' } // Luwuk: dua file sumber, GT (ch1) dan MT (ch2) // Palu cuma punya sumber BCP -> semua disimpan di ch1, kolom ch2 disembunyikan
+  luwuk:    { ch1: 'TBP', ch2: 'ASB' } // Luwuk: dua file sumber, TBP (ch1, file GT) dan ASB (ch2, file MT) // Palu cuma punya sumber BCP -> semua disimpan di ch1, kolom ch2 disembunyikan
 };
 const REGION_LABEL = { makassar:'Makassar', kendari:'Kendari', palu:'Palu', luwuk:'Luwuk' };
 
@@ -1408,7 +1408,7 @@ function strataCellHtml(idx, catKey, currentVal, actual, scheme, handler, toko){
    kolom yang memang selalu kosong buat kategori-kategori itu. */
 function categoryHasBcp(catKey, region){
   if((region || currentRegion) === 'palu') return false; // Palu: satu kolom BCP saja (ch1)
-  if((region || currentRegion) === 'luwuk') return true;  // Luwuk: kolom GT dan MT tampil untuk semua kategori
+  if((region || currentRegion) === 'luwuk') return true;  // Luwuk: kolom TBP dan ASB tampil untuk semua kategori
   return catKey === 'all' || catKey === 'nspolos';
 }
 
@@ -1775,8 +1775,8 @@ function switchImportSource(src){
     bsp: 'BSP → otomatis masuk ke Makassar (Netto per toko per item).',
     bcp: 'BCP → otomatis diproses untuk Makassar, Kendari & Palu sekaligus dari satu file (DPP, ALL & NS Polos).',
     matakar: 'MATAKAR → otomatis masuk ke Kendari (NET_SALES_MINUS_PPN).',
-    luwukgt: 'LUWUK GT \u2192 masuk ke Luwuk kolom GT (Nilai Penjualan, dipecah per bulan sesuai Tanggal detil).',
-    luwukmt: 'LUWUK MT \u2192 masuk ke Luwuk kolom MT (Nilai Penjualan, dipecah per bulan sesuai Tanggal detil).'
+    luwukgt: 'LUWUK TBP \u2192 masuk ke Luwuk kolom TBP (Nilai Penjualan, dipecah per bulan sesuai Tanggal detil).',
+    luwukmt: 'LUWUK ASB \u2192 masuk ke Luwuk kolom ASB (Nilai Penjualan, dipecah per bulan sesuai Tanggal detil).'
   };
   document.getElementById('importStatus').textContent = hint[src];
   document.getElementById('importStatus').className = 'import-status';
@@ -2065,8 +2065,8 @@ function handleImportFile(event){
       const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
       if(currentImportSource === 'bsp') importBSP(rows, wb);
       else if(currentImportSource === 'bcp') importBCP(rows, wb);
-      else if(currentImportSource === 'luwukgt') importLuwuk(rows, 'ch1', 'GT');
-      else if(currentImportSource === 'luwukmt') importLuwuk(rows, 'ch2', 'MT');
+      else if(currentImportSource === 'luwukgt') importLuwuk(rows, 'ch1', 'TBP');
+      else if(currentImportSource === 'luwukmt') importLuwuk(rows, 'ch2', 'ASB');
       else importMatakar(rows, wb);
     }catch(err){
       status.textContent = 'Gagal membaca file: ' + err.message;
