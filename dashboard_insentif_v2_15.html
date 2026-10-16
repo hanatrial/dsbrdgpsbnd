@@ -2128,7 +2128,7 @@ function importBSP(rows, wb){
       }
     }
   }
-  applyImportedSums(sums, 'ch1', null, region, currentImportMonth);
+  applyImportedSums(sums, 'ch1', null, region, currentImportMonth, true);
   Object.entries(details).forEach(([toko, cats]) => {
     Object.entries(cats).forEach(([cat, items]) => setDetailChannel(region, toko, cat, 'ch1', items));
   });
@@ -2208,8 +2208,8 @@ function importBCP(rows, wb){
       det[match.toko][nama] = (det[match.toko][nama] || 0) + dpp;
     }
   }
-  applyImportedSums(sumsByRegion.makassar, 'ch2', ['all','nspolos'], 'makassar', currentImportMonth);
-  applyImportedSums(sumsByRegion.kendari, 'ch2', ['all','nspolos'], 'kendari', currentImportMonth);
+  applyImportedSums(sumsByRegion.makassar, 'ch2', ['all','nspolos'], 'makassar', currentImportMonth, true);
+  applyImportedSums(sumsByRegion.kendari, 'ch2', ['all','nspolos'], 'kendari', currentImportMonth, true);
   // Palu: semua kategori dari BCP, disimpan di ch1 (ch2 dikosongkan supaya tidak dobel)
   const paluZeros = Object.fromEntries(Object.keys(sumsByRegion.palu).map(k => [k, paluZero()]));
   applyImportedSums(paluZeros, 'ch2', PALU_CATS, 'palu', currentImportMonth);
@@ -2349,7 +2349,7 @@ function importMatakar(rows, wb){
       }
     }
   }
-  applyImportedSums(sums, 'ch1', null, region, currentImportMonth);
+  applyImportedSums(sums, 'ch1', null, region, currentImportMonth, true);
   Object.entries(details).forEach(([toko, cats]) => {
     Object.entries(cats).forEach(([cat, items]) => setDetailChannel(region, toko, cat, 'ch1', items));
   });
@@ -2366,14 +2366,30 @@ function setDetailChannel(region, toko, cat, channelField, itemsObj){
   DETAIL_DATA[region][toko][cat][channelField] = itemsObj; // replace, bukan tambah
 }
 
-function applyImportedSums(sums, channelField, onlyCats, region, monthKey){
+/* zeroMissing: toko yang TIDAK ada di file ini (tidak ada transaksi) di-nol-kan untuk
+   kategori yang diisi importer, supaya angka lama dari import sebelumnya tidak nyangkut.
+   Hanya jalan kalau file memang berisi minimal 1 toko di region tsb. */
+function applyImportedSums(sums, channelField, onlyCats, region, monthKey, zeroMissing){
   const reg = region || currentRegion;
   const outlets = data[reg];
   const month = monthKey || currentImportMonth || todayMonthKey();
   const isCurrentMonth = month === todayMonthKey();
+  const sampleKeys = Object.keys(Object.values(sums)[0] || {});
   outlets.forEach(row => {
     const s = sums[row.toko];
-    if(!s) return;
+    if(!s){
+      if(zeroMissing && sampleKeys.length){
+        const zc = onlyCats || ['all','oil','porang','platinum','milk','school','teen','nspolos','granola'];
+        zc.forEach(cat => {
+          if(!sampleKeys.includes(cat)) return;
+          setMonthlyValue(reg, row.toko, month, cat, channelField, 0);
+          if(isCurrentMonth && row[cat]) row[cat][channelField] = 0;
+          const dd = DETAIL_DATA[reg] && DETAIL_DATA[reg][row.toko] && DETAIL_DATA[reg][row.toko][cat];
+          if(dd && isCurrentMonth) dd[channelField] = {};
+        });
+      }
+      return;
+    }
     const cats = onlyCats || ['all','oil','porang','platinum','milk','school','teen','nspolos','granola'];
     cats.forEach(cat => {
       if(s[cat] !== undefined){
